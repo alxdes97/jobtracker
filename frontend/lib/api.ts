@@ -183,7 +183,7 @@ export const api = {
       method: 'POST',
       body: body({ resumeId, isTailored }),
     }),
-  deleteResume: (id: string, resumeId: string) =>
+  deleteJobResume: (id: string, resumeId: string) =>
     request<{ job: Job }>(`/jobs/${id}/resumes/${resumeId}`, { method: 'DELETE' }),
 
   linkContact: (id: string, contactId: string) =>

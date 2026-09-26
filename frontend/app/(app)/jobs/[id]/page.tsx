@@ -383,7 +383,7 @@ export default function JobDetailPage() {
                 <LinkResume
                   resumes={job.resumes}
                   onLink={async (resumeId) => setJob((await api.linkLibraryResume(id, resumeId)).job)}
-                  onUnlink={async (resumeId) => setJob((await api.deleteResume(id, resumeId)).job)}
+                  onUnlink={async (resumeId) => setJob((await api.deleteJobResume(id, resumeId)).job)}
                 />
               </div>
               <dl className="space-y-1 border-t border-slate-100 pt-3 text-sm text-slate-600">
@@ -419,7 +419,7 @@ export default function JobDetailPage() {
               resumes={job.resumes}
               onAdd={async (data) => setJob((await api.addResume(id, data)).job)}
               onLink={async (resumeId) => setJob((await api.linkLibraryResume(id, resumeId)).job)}
-              onDelete={async (resumeId) => setJob((await api.deleteResume(id, resumeId)).job)}
+              onDelete={async (resumeId) => setJob((await api.deleteJobResume(id, resumeId)).job)}
             />
           ) : null}
 

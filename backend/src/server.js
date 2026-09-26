@@ -12,8 +12,8 @@ async function start() {
     process.exit(1);
   }
 
-  createApp().listen(env.port, () => {
-    console.log(`API listening on http://localhost:${env.port}/api`);
+  createApp().listen(env.port, '0.0.0.0', () => {
+    console.log(`API listening on http://0.0.0.0:${env.port}/api`);
   });
 }
 
