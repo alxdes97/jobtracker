@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useRef, useState } from 'react';
+import { useAuth } from '@/components/AuthProvider';
 import { DotsIcon, PlusIcon } from '@/components/Icons';
 import { StarRating } from '@/components/StarRating';
 import { PIPELINE_STATUSES, type Job, type JobStatus } from '@/lib/types';
@@ -38,6 +39,7 @@ function titleBarStyle(status: JobStatus) {
 }
 
 export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
+  const { user } = useAuth();
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<JobStatus | null>(null);
   const [openMenu, setOpenMenu] = useState<JobStatus | null>(null);
@@ -214,12 +216,15 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                     )}
                   >
                     <Link href={`/jobs/${job._id}`} className="block">
-                      <h4
-                        className="border-b border-black/10 px-3 py-2 text-sm font-medium"
+                      <div
+                        className="border-b border-black/10 px-3 py-2"
                         style={titleBarStyle(job.status)}
                       >
-                        {job.title}
-                      </h4>
+                        <h4 className="text-sm font-medium">{job.title}</h4>
+                        {user?.name ? (
+                          <p className="mt-0.5 truncate text-xs opacity-80">{user.name}</p>
+                        ) : null}
+                      </div>
                       <p className="px-3 pt-2 text-xs text-slate-500">
                         {job.companyName}
                         {job.location ? ` · ${job.location}` : ''}

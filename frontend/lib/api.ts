@@ -86,6 +86,16 @@ export const api = {
     request<{ job: Job }>(`/jobs/${id}/move`, { method: 'PATCH', body: body(data) }),
   deleteJob: (id: string) => request<void>(`/jobs/${id}`, { method: 'DELETE' }),
 
+  addNote: (id: string, bodyText: string) =>
+    request<{ job: Job }>(`/jobs/${id}/notes`, { method: 'POST', body: body({ body: bodyText }) }),
+  updateNote: (id: string, noteId: string, bodyText: string) =>
+    request<{ job: Job }>(`/jobs/${id}/notes/${noteId}`, {
+      method: 'PATCH',
+      body: body({ body: bodyText }),
+    }),
+  deleteNote: (id: string, noteId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/notes/${noteId}`, { method: 'DELETE' }),
+
   addChecklistItem: (id: string, label: string) =>
     request<{ job: Job }>(`/jobs/${id}/checklist`, { method: 'POST', body: body({ label }) }),
   updateChecklistItem: (id: string, itemId: string, data: { done?: boolean; label?: string }) =>

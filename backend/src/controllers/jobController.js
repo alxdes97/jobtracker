@@ -11,7 +11,9 @@ import {
   createUpload,
   displayName,
   extensionOf,
+  jobAttachmentPrefix,
   removeStoredFile,
+  saveUploadedFile,
   sendStoredFile,
 } from '../utils/uploads.js';
 
@@ -246,6 +248,46 @@ export const moveJob = asyncHandler(async (req, res) => {
   res.json({ job: withDerived(moved) });
 });
 
+export const addNote = asyncHandler(async (req, res) => {
+  const body = String(req.body.body || '').trim();
+  if (!body) throw ApiError.badRequest('Note text is required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  if (!job.noteItems) job.noteItems = [];
+  job.noteItems.push({ body });
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const updateNote = asyncHandler(async (req, res) => {
+  const body = String(req.body.body || '').trim();
+  if (!body) throw ApiError.badRequest('Note text is required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const note = job.noteItems.id(req.params.noteId);
+  if (!note) throw ApiError.notFound('Note not found');
+
+  note.body = body;
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const deleteNote = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const note = job.noteItems.id(req.params.noteId);
+  if (!note) throw ApiError.notFound('Note not found');
+
+  note.deleteOne();
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
 export const addChecklistItem = asyncHandler(async (req, res) => {
   const { label } = req.body;
   if (!label?.trim()) throw ApiError.badRequest('Checklist item needs a label');
@@ -452,31 +494,32 @@ export const addInterviewAttachment = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('Choose a file to attach');
 
   const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
-  if (!job) {
-    await removeStoredFile(req.file.filename);
-    throw ApiError.notFound('Job not found');
-  }
+  if (!job) throw ApiError.notFound('Job not found');
 
   const interview = job.interviews.id(req.params.interviewId);
-  if (!interview) {
-    await removeStoredFile(req.file.filename);
-    throw ApiError.notFound('Interview not found');
-  }
+  if (!interview) throw ApiError.notFound('Interview not found');
 
   const originalName = path.basename(req.file.originalname).slice(0, 180);
+  const mimeType = ATTACHMENT_TYPES.get(extensionOf(originalName));
+  const storedName = await saveUploadedFile(
+    req.file,
+    jobAttachmentPrefix(req.user.name, job.title),
+    mimeType,
+  );
+
   if (!interview.attachments) interview.attachments = [];
   interview.attachments.push({
     name: displayName(originalName),
     originalName,
-    mimeType: ATTACHMENT_TYPES.get(extensionOf(originalName)),
+    mimeType,
     size: req.file.size,
-    storedName: req.file.filename,
+    storedName,
   });
 
   try {
     await job.save();
   } catch (error) {
-    await removeStoredFile(req.file.filename);
+    await removeStoredFile(storedName);
     throw error;
   }
 

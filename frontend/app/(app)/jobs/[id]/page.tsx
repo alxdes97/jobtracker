@@ -333,7 +333,9 @@ export default function JobDetailPage() {
         </div>
 
         <aside className="card h-fit p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-800">{sidePanelTitle}</h3>
+          {tab === 'notes' ? null : (
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">{sidePanelTitle}</h3>
+          )}
 
           {tab === 'info' ? (
             <div className="space-y-3">
@@ -399,7 +401,14 @@ export default function JobDetailPage() {
           ) : null}
 
           {tab === 'notes' ? (
-            <NotesPanel value={job.notes} onSave={(notes) => patch({ notes })} />
+            <NotesPanel
+              items={job.noteItems ?? []}
+              legacy={job.notes ?? ''}
+              onAdd={async (body) => setJob((await api.addNote(id, body)).job)}
+              onUpdate={async (noteId, body) => setJob((await api.updateNote(id, noteId, body)).job)}
+              onDelete={async (noteId) => setJob((await api.deleteNote(id, noteId)).job)}
+              onClearLegacy={async () => patch({ notes: '' })}
+            />
           ) : null}
 
           {tab === 'resumes' ? (

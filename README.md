@@ -49,10 +49,14 @@ cp frontend/.env.example frontend/.env.local
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `PORT` | `5000` | API port |
-| `MONGODB_URI` | `mongodb://127.0.0.1:27017/job-tracker` | Local MongoDB or an Atlas connection string |
+| `MONGODB_URI` | `mongodb://localhost:27017/jobtracker` | Local MongoDB or an Atlas connection string |
 | `JWT_SECRET` | — | Required in production; use a long random string |
 | `JWT_EXPIRES_IN` | `7d` | Session lifetime |
 | `CORS_ORIGIN` | `http://localhost:3000` | Comma-separated list of allowed origins |
+| `CLOUDFLARE_ACCOUNT_ID` | — | Cloudflare account that owns the R2 bucket |
+| `R2_ACCESS_KEY_ID` | — | R2 API token access key |
+| `R2_SECRET_ACCESS_KEY` | — | R2 API token secret |
+| `R2_BUCKET` | `jobtracker` | Private bucket for resumes and job attachments |
 
 ### 3. Start MongoDB
 

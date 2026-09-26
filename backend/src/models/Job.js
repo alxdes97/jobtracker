@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
 import { INTERVIEW_FORMATS, INTERVIEW_TYPES, JOB_STATUSES } from '../constants.js';
 
+const noteItemSchema = new mongoose.Schema(
+  {
+    body: { type: String, required: true, trim: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
 const checklistItemSchema = new mongoose.Schema(
   {
     label: { type: String, required: true, trim: true },
@@ -117,6 +125,7 @@ const jobSchema = new mongoose.Schema(
     deadline: { type: Date, default: null },
     followUp: { type: Date, default: null },
     notes: { type: String, default: '' },
+    noteItems: { type: [noteItemSchema], default: [] },
     checklist: { type: [checklistItemSchema], default: [] },
     interviews: { type: [interviewSchema], default: [] },
     resumes: { type: [resumeSchema], default: [] },

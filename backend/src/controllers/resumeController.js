@@ -7,6 +7,7 @@ import {
   displayName,
   extensionOf,
   removeStoredFile,
+  saveUploadedFile,
   sendStoredFile,
 } from '../utils/uploads.js';
 
@@ -28,19 +29,21 @@ export const createResume = asyncHandler(async (req, res) => {
 
   const ext = extensionOf(req.file.originalname);
   const originalName = path.basename(req.file.originalname).slice(0, 180);
+  const mimeType = ALLOWED.get(ext);
+  const storedName = await saveUploadedFile(req.file, 'resume', mimeType);
 
   try {
     const resume = await Resume.create({
       user: req.user._id,
       name: displayName(originalName),
       originalName,
-      mimeType: ALLOWED.get(ext),
+      mimeType,
       size: req.file.size,
-      storedName: req.file.filename,
+      storedName,
     });
     res.status(201).json({ resume });
   } catch (error) {
-    await removeStoredFile(req.file.filename);
+    await removeStoredFile(storedName);
     throw error;
   }
 });

@@ -9,7 +9,7 @@ import { env } from '../config/env.js';
 import { seedDemoData } from './seedData.js';
 
 const mongo = await MongoMemoryServer.create();
-await connectDatabase(mongo.getUri('job-tracker'));
+await connectDatabase(mongo.getUri('jobtracker'));
 console.log('Connected to an in-memory MongoDB (data is not persisted)');
 
 const credentials = await seedDemoData();

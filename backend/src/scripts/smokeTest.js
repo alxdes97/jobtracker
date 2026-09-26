@@ -153,6 +153,23 @@ check('tracks checklist progress in the guidance summary', async () => {
   assert.ok(after.job.guidance.percent > 0);
 });
 
+check('adds, edits and removes a job note', async () => {
+  const created = await call('POST', `/api/jobs/${jobId}/notes`, {
+    body: 'Ask about the on-call rotation.',
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.payload.job.noteItems[0].body, 'Ask about the on-call rotation.');
+  const noteId = created.payload.job.noteItems[0]._id;
+
+  const updated = await call('PATCH', `/api/jobs/${jobId}/notes/${noteId}`, {
+    body: 'Ask about on-call and timezone.',
+  });
+  assert.equal(updated.payload.job.noteItems[0].body, 'Ask about on-call and timezone.');
+
+  const removed = await call('DELETE', `/api/jobs/${jobId}/notes/${noteId}`);
+  assert.equal(removed.payload.job.noteItems.length, 0);
+});
+
 check('tracks interviews, interviewers and a practice session', async () => {
   const created = await call('POST', `/api/jobs/${jobId}/interviews`);
   assert.equal(created.status, 201);

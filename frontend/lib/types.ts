@@ -19,6 +19,12 @@ export interface User {
   email: string;
 }
 
+export interface NoteItem {
+  _id: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface ChecklistItem {
   _id: string;
   label: string;
@@ -136,6 +142,7 @@ export interface Job {
   deadline: string | null;
   followUp: string | null;
   notes: string;
+  noteItems: NoteItem[];
   checklist: ChecklistItem[];
   interviews: Interview[];
   resumes: JobResume[];
