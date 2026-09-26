@@ -25,6 +25,12 @@ export interface NoteItem {
   createdAt: string;
 }
 
+export interface TodoItem {
+  _id: string;
+  text: string;
+  done: boolean;
+}
+
 export interface ChecklistItem {
   _id: string;
   label: string;
@@ -144,6 +150,7 @@ export interface Job {
   notes: string;
   noteItems: NoteItem[];
   checklist: ChecklistItem[];
+  todos: TodoItem[];
   interviews: Interview[];
   resumes: JobResume[];
   contacts: JobContact[];

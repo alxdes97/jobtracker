@@ -9,6 +9,14 @@ const noteItemSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const todoItemSchema = new mongoose.Schema(
+  {
+    text: { type: String, required: true, trim: true },
+    done: { type: Boolean, default: false },
+  },
+  { _id: true },
+);
+
 const checklistItemSchema = new mongoose.Schema(
   {
     label: { type: String, required: true, trim: true },
@@ -127,6 +135,7 @@ const jobSchema = new mongoose.Schema(
     notes: { type: String, default: '' },
     noteItems: { type: [noteItemSchema], default: [] },
     checklist: { type: [checklistItemSchema], default: [] },
+    todos: { type: [todoItemSchema], default: [] },
     interviews: { type: [interviewSchema], default: [] },
     resumes: { type: [resumeSchema], default: [] },
     contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Contact' }],

@@ -153,6 +153,20 @@ check('tracks checklist progress in the guidance summary', async () => {
   assert.ok(after.job.guidance.percent > 0);
 });
 
+check('adds a to-do and marks it done', async () => {
+  const created = await call('POST', `/api/jobs/${jobId}/todos`, { text: 'Send the portfolio link' });
+  assert.equal(created.status, 201);
+  assert.equal(created.payload.job.todos[0].text, 'Send the portfolio link');
+  assert.equal(created.payload.job.todos[0].done, false);
+  const todoId = created.payload.job.todos[0]._id;
+
+  const updated = await call('PATCH', `/api/jobs/${jobId}/todos/${todoId}`, { done: true });
+  assert.equal(updated.payload.job.todos[0].done, true);
+
+  const removed = await call('DELETE', `/api/jobs/${jobId}/todos/${todoId}`);
+  assert.equal(removed.payload.job.todos.length, 0);
+});
+
 check('adds, edits and removes a job note', async () => {
   const created = await call('POST', `/api/jobs/${jobId}/notes`, {
     body: 'Ask about the on-call rotation.',

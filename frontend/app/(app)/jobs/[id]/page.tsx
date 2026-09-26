@@ -9,6 +9,7 @@ import { StatusStepper } from '@/components/jobs/StatusStepper';
 import { KeywordPanel } from '@/components/jobs/KeywordPanel';
 import { NotesPanel } from '@/components/jobs/NotesPanel';
 import { ChecklistPanel } from '@/components/jobs/ChecklistPanel';
+import { TodoPanel } from '@/components/jobs/TodoPanel';
 import { LinkResume } from '@/components/jobs/LinkResume';
 import { ResumesPanel } from '@/components/jobs/ResumesPanel';
 import { JobContactsPanel } from '@/components/jobs/JobContactsPanel';
@@ -17,6 +18,7 @@ import { InterviewTracking } from '@/components/jobs/InterviewTracking';
 import {
   CheckSquareIcon,
   InfoIcon,
+  ListIcon,
   MailIcon,
   NoteIcon,
   PaperclipIcon,
@@ -34,6 +36,7 @@ const TABS = [
   { key: 'contacts', label: 'Contacts', icon: UsersIcon },
   { key: 'templates', label: 'Email Templates', icon: MailIcon },
   { key: 'checklist', label: 'Check List', icon: CheckSquareIcon },
+  { key: 'todo', label: 'To Do', icon: ListIcon },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
@@ -441,6 +444,17 @@ export default function JobDetailPage() {
               }
               onAdd={async (label) => setJob((await api.addChecklistItem(id, label)).job)}
               onDelete={async (itemId) => setJob((await api.deleteChecklistItem(id, itemId)).job)}
+            />
+          ) : null}
+
+          {tab === 'todo' ? (
+            <TodoPanel
+              items={job.todos ?? []}
+              onToggle={async (itemId, done) =>
+                setJob((await api.updateTodo(id, itemId, { done })).job)
+              }
+              onAdd={async (text) => setJob((await api.addTodo(id, text)).job)}
+              onDelete={async (itemId) => setJob((await api.deleteTodo(id, itemId)).job)}
             />
           ) : null}
         </aside>

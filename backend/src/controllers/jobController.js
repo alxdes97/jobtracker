@@ -288,6 +288,44 @@ export const deleteNote = asyncHandler(async (req, res) => {
   res.json({ job: withDerived(job) });
 });
 
+export const addTodo = asyncHandler(async (req, res) => {
+  const text = String(req.body.text || '').trim();
+  if (!text) throw ApiError.badRequest('To-do item needs text');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  job.todos.push({ text, done: false });
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const updateTodo = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const item = job.todos.id(req.params.todoId);
+  if (!item) throw ApiError.notFound('To-do item not found');
+
+  if ('done' in req.body) item.done = Boolean(req.body.done);
+  if ('text' in req.body && String(req.body.text).trim()) item.text = String(req.body.text).trim();
+
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const deleteTodo = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const item = job.todos.id(req.params.todoId);
+  if (!item) throw ApiError.notFound('To-do item not found');
+
+  item.deleteOne();
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
 export const addChecklistItem = asyncHandler(async (req, res) => {
   const { label } = req.body;
   if (!label?.trim()) throw ApiError.badRequest('Checklist item needs a label');
