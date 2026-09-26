@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { JOB_STATUSES } from '../constants.js';
+import { INTERVIEW_FORMATS, INTERVIEW_TYPES, JOB_STATUSES } from '../constants.js';
 
 const checklistItemSchema = new mongoose.Schema(
   {
@@ -13,9 +13,77 @@ const checklistItemSchema = new mongoose.Schema(
 const resumeSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
+    originalName: { type: String, trim: true, default: '' },
     url: { type: String, trim: true, default: '' },
     isTailored: { type: Boolean, default: false },
+    libraryResume: { type: mongoose.Schema.Types.ObjectId, ref: 'Resume', default: null },
     attachedAt: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
+const interviewerSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    title: { type: String, trim: true, default: '' },
+  },
+  { _id: true },
+);
+
+const practiceSessionSchema = new mongoose.Schema(
+  {
+    notes: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
+const conversationEntrySchema = new mongoose.Schema(
+  {
+    speaker: { type: String, trim: true, default: '' },
+    message: { type: String, required: true, trim: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
+const attachmentSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    originalName: { type: String, required: true, trim: true },
+    mimeType: { type: String, required: true },
+    size: { type: Number, required: true, min: 1 },
+    storedName: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
+attachmentSchema.set('toJSON', {
+  transform(_doc, ret) {
+    delete ret.storedName;
+    return ret;
+  },
+});
+
+const feedbackNoteSchema = new mongoose.Schema(
+  {
+    body: { type: String, required: true, trim: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true },
+);
+
+const interviewSchema = new mongoose.Schema(
+  {
+    date: { type: Date, default: null },
+    type: { type: String, enum: [...INTERVIEW_TYPES, ''], default: '' },
+    format: { type: String, enum: [...INTERVIEW_FORMATS, ''], default: '' },
+    interviewers: { type: [interviewerSchema], default: [] },
+    conversation: { type: [conversationEntrySchema], default: [] },
+    feedback: { type: [feedbackNoteSchema], default: [] },
+    attachments: { type: [attachmentSchema], default: [] },
+    practiceSessions: { type: [practiceSessionSchema], default: [] },
   },
   { _id: true },
 );
@@ -50,6 +118,7 @@ const jobSchema = new mongoose.Schema(
     followUp: { type: Date, default: null },
     notes: { type: String, default: '' },
     checklist: { type: [checklistItemSchema], default: [] },
+    interviews: { type: [interviewSchema], default: [] },
     resumes: { type: [resumeSchema], default: [] },
     contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Contact' }],
     statusHistory: { type: [statusEventSchema], default: [] },

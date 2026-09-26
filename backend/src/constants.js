@@ -45,6 +45,19 @@ export const COMPANY_SIZES = [
   '10000+',
 ];
 
+export const INTERVIEW_TYPES = [
+  'Phone Screen',
+  'Recruiter',
+  'Hiring Manager',
+  'Technical',
+  'Behavioral',
+  'Panel',
+  'Final',
+  'Other',
+];
+
+export const INTERVIEW_FORMATS = ['Phone', 'Video', 'In Person', 'Hybrid'];
+
 export const COMPANY_TYPES = [
   'Public',
   'Private',

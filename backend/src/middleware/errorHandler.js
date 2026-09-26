@@ -23,6 +23,15 @@ export function errorHandler(error, _req, res, _next) {
     return;
   }
 
+  if (error?.name === 'MulterError') {
+    const message =
+      error.code === 'LIMIT_FILE_SIZE'
+        ? 'Resume must be 8 MB or smaller'
+        : 'Could not upload that file';
+    res.status(400).json({ error: message });
+    return;
+  }
+
   if (error?.code === 11000) {
     res.status(409).json({ error: 'That record already exists', details: error.keyValue });
     return;

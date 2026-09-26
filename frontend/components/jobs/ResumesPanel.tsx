@@ -2,16 +2,19 @@
 
 import { useState } from 'react';
 import { PaperclipIcon, TrashIcon } from '@/components/Icons';
+import { downloadResume } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import type { JobResume } from '@/lib/types';
+import { LinkResume } from './LinkResume';
 
 interface ResumesPanelProps {
   resumes: JobResume[];
   onAdd: (data: { name: string; url: string; isTailored: boolean }) => Promise<void>;
+  onLink: (resumeId: string) => Promise<void>;
   onDelete: (resumeId: string) => void;
 }
 
-export function ResumesPanel({ resumes, onAdd, onDelete }: ResumesPanelProps) {
+export function ResumesPanel({ resumes, onAdd, onLink, onDelete }: ResumesPanelProps) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [isTailored, setIsTailored] = useState(false);
@@ -48,7 +51,17 @@ export function ResumesPanel({ resumes, onAdd, onDelete }: ResumesPanelProps) {
             <div className="min-w-0">
               <p className="flex items-center gap-2 text-sm font-medium text-slate-800">
                 <PaperclipIcon className="h-4 w-4 text-slate-400" />
-                {resume.url ? (
+                {resume.libraryResume ? (
+                  <button
+                    type="button"
+                    className="truncate text-left hover:text-brand-700 hover:underline"
+                    onClick={() =>
+                      void downloadResume(resume.libraryResume as string, resume.originalName || resume.name)
+                    }
+                  >
+                    {resume.name}
+                  </button>
+                ) : resume.url ? (
                   <a
                     href={resume.url}
                     target="_blank"
@@ -77,6 +90,16 @@ export function ResumesPanel({ resumes, onAdd, onDelete }: ResumesPanelProps) {
           </li>
         ))}
       </ul>
+
+      <div className="border-t border-slate-200 pt-4">
+        <h4 className="mb-2 text-sm font-semibold text-slate-800">From your resumes</h4>
+        <LinkResume
+          resumes={resumes}
+          showLinked={false}
+          onLink={onLink}
+          onUnlink={async (resumeId) => onDelete(resumeId)}
+        />
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-2 border-t border-slate-200 pt-4">
         <input

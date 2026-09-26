@@ -26,11 +26,72 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+export const INTERVIEW_TYPES = [
+  'Phone Screen',
+  'Recruiter',
+  'Hiring Manager',
+  'Technical',
+  'Behavioral',
+  'Panel',
+  'Final',
+  'Other',
+] as const;
+
+export const INTERVIEW_FORMATS = ['Phone', 'Video', 'In Person', 'Hybrid'] as const;
+
+export interface Interviewer {
+  _id: string;
+  name: string;
+  title: string;
+}
+
+export interface ConversationEntry {
+  _id: string;
+  speaker: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface FeedbackNote {
+  _id: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface PracticeSession {
+  _id: string;
+  notes: string;
+  createdAt: string;
+}
+
+export interface InterviewAttachment {
+  _id: string;
+  name: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface Interview {
+  _id: string;
+  date: string | null;
+  type: string;
+  format: string;
+  interviewers: Interviewer[];
+  conversation: ConversationEntry[];
+  feedback: FeedbackNote[];
+  attachments: InterviewAttachment[];
+  practiceSessions: PracticeSession[];
+}
+
 export interface JobResume {
   _id: string;
   name: string;
+  originalName?: string;
   url: string;
   isTailored: boolean;
+  libraryResume?: string | null;
   attachedAt: string;
 }
 
@@ -76,6 +137,7 @@ export interface Job {
   followUp: string | null;
   notes: string;
   checklist: ChecklistItem[];
+  interviews: Interview[];
   resumes: JobResume[];
   contacts: JobContact[];
   archived: boolean;
@@ -121,6 +183,16 @@ export interface Company {
   notes: string;
   jobCount: number;
   contactCount: number;
+}
+
+export interface ResumeFile {
+  _id: string;
+  name: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface EmailTemplate {

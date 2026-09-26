@@ -5,6 +5,7 @@ import type {
   Job,
   JobStatus,
   Meta,
+  ResumeFile,
   User,
 } from './types';
 
@@ -95,8 +96,76 @@ export const api = {
   deleteChecklistItem: (id: string, itemId: string) =>
     request<{ job: Job }>(`/jobs/${id}/checklist/${itemId}`, { method: 'DELETE' }),
 
+  addInterview: (id: string) =>
+    request<{ job: Job; interviewId: string }>(`/jobs/${id}/interviews`, { method: 'POST' }),
+  updateInterview: (
+    id: string,
+    interviewId: string,
+    data: { date?: string | null; type?: string; format?: string },
+  ) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}`, {
+      method: 'PATCH',
+      body: body(data),
+    }),
+  deleteInterview: (id: string, interviewId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}`, { method: 'DELETE' }),
+  addInterviewer: (id: string, interviewId: string, data: { name: string; title?: string }) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/interviewers`, {
+      method: 'POST',
+      body: body(data),
+    }),
+  deleteInterviewer: (id: string, interviewId: string, interviewerId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/interviewers/${interviewerId}`, {
+      method: 'DELETE',
+    }),
+  addConversation: (id: string, interviewId: string, data: { speaker?: string; message: string }) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/conversation`, {
+      method: 'POST',
+      body: body(data),
+    }),
+  deleteConversation: (id: string, interviewId: string, entryId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/conversation/${entryId}`, {
+      method: 'DELETE',
+    }),
+  addFeedback: (id: string, interviewId: string, bodyText: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/feedback`, {
+      method: 'POST',
+      body: body({ body: bodyText }),
+    }),
+  deleteFeedback: (id: string, interviewId: string, feedbackId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/feedback/${feedbackId}`, {
+      method: 'DELETE',
+    }),
+  addPracticeSession: (id: string, interviewId: string, notes: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/practice`, {
+      method: 'POST',
+      body: body({ notes }),
+    }),
+  uploadInterviewAttachment: async (id: string, interviewId: string, file: File) => {
+    const token = tokenStore.get();
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch(`${API_URL}/jobs/${id}/interviews/${interviewId}/attachments`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new ApiError(response.status, payload?.error || 'Upload failed');
+    return payload as { job: Job };
+  },
+  deleteInterviewAttachment: (id: string, interviewId: string, attachmentId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/attachments/${attachmentId}`, {
+      method: 'DELETE',
+    }),
+
   addResume: (id: string, data: { name: string; url?: string; isTailored?: boolean }) =>
     request<{ job: Job }>(`/jobs/${id}/resumes`, { method: 'POST', body: body(data) }),
+  linkLibraryResume: (id: string, resumeId: string, isTailored = false) =>
+    request<{ job: Job }>(`/jobs/${id}/resumes/link`, {
+      method: 'POST',
+      body: body({ resumeId, isTailored }),
+    }),
   deleteResume: (id: string, resumeId: string) =>
     request<{ job: Job }>(`/jobs/${id}/resumes/${resumeId}`, { method: 'DELETE' }),
 
@@ -130,6 +199,24 @@ export const api = {
     request<{ company: Company }>(`/companies/${id}`, { method: 'PATCH', body: body(data) }),
   deleteCompany: (id: string) => request<void>(`/companies/${id}`, { method: 'DELETE' }),
 
+  listResumes: () => request<{ resumes: ResumeFile[] }>('/resumes'),
+  uploadResume: async (file: File) => {
+    const token = tokenStore.get();
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch(`${API_URL}/resumes`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new ApiError(response.status, payload?.error || 'Upload failed');
+    }
+    return payload as { resume: ResumeFile };
+  },
+  deleteResume: (id: string) => request<void>(`/resumes/${id}`, { method: 'DELETE' }),
+
   listTemplates: () => request<{ templates: EmailTemplate[] }>('/templates'),
   createTemplate: (data: Partial<EmailTemplate>) =>
     request<{ template: EmailTemplate }>('/templates', { method: 'POST', body: body(data) }),
@@ -140,6 +227,48 @@ export const api = {
     }),
   deleteTemplate: (id: string) => request<void>(`/templates/${id}`, { method: 'DELETE' }),
 };
+
+export async function downloadInterviewAttachment(
+  jobId: string,
+  interviewId: string,
+  attachmentId: string,
+  filename: string,
+) {
+  const token = tokenStore.get();
+  const response = await fetch(
+    `${API_URL}/jobs/${jobId}/interviews/${interviewId}/attachments/${attachmentId}/file`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+  if (!response.ok) throw new ApiError(response.status, 'Could not download that attachment');
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadResume(id: string, filename: string) {
+  const token = tokenStore.get();
+  const response = await fetch(`${API_URL}/resumes/${id}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) throw new ApiError(response.status, 'Could not download that resume');
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 /** Streams a CSV export through the authenticated endpoint and saves it. */
 export async function downloadExport(resource: 'jobs' | 'contacts' | 'companies') {

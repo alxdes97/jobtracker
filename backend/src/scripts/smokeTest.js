@@ -153,6 +153,73 @@ check('tracks checklist progress in the guidance summary', async () => {
   assert.ok(after.job.guidance.percent > 0);
 });
 
+check('tracks interviews, interviewers and a practice session', async () => {
+  const created = await call('POST', `/api/jobs/${jobId}/interviews`);
+  assert.equal(created.status, 201);
+  const interviewId = created.payload.interviewId;
+  assert.equal(created.payload.job.interviews.length, 1);
+
+  const updated = await call('PATCH', `/api/jobs/${jobId}/interviews/${interviewId}`, {
+    date: '2026-10-02',
+    type: 'Technical',
+    format: 'Video',
+  });
+  assert.equal(updated.payload.job.interviews[0].type, 'Technical');
+  assert.equal(updated.payload.job.interviews[0].format, 'Video');
+  assert.ok(updated.payload.job.interviews[0].date);
+
+  const person = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/interviewers`, {
+    name: 'Stephanie Scotto',
+    title: 'Recruiter',
+  });
+  assert.equal(person.status, 201);
+  assert.equal(person.payload.job.interviews[0].interviewers[0].name, 'Stephanie Scotto');
+
+  const conversation = await call(
+    'POST',
+    `/api/jobs/${jobId}/interviews/${interviewId}/conversation`,
+    { speaker: 'Interviewer', message: 'Walk me through a recent project.' },
+  );
+  assert.equal(conversation.status, 201);
+  assert.equal(conversation.payload.job.interviews[0].conversation[0].message, 'Walk me through a recent project.');
+
+  const feedback = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/feedback`, {
+    body: 'Strong on system design, light on metrics.',
+  });
+  assert.equal(feedback.payload.job.interviews[0].feedback[0].body, 'Strong on system design, light on metrics.');
+
+  const practice = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/practice`, {
+    notes: 'Rehearse the pipeline story.',
+  });
+  assert.equal(practice.payload.job.interviews[0].practiceSessions.length, 1);
+
+  const attachmentForm = new FormData();
+  attachmentForm.append(
+    'file',
+    new Blob([Buffer.from('take-home notes')], { type: 'text/plain' }),
+    'take-home.txt',
+  );
+  const attached = await fetch(
+    `${baseUrl}/api/jobs/${jobId}/interviews/${interviewId}/attachments`,
+    { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: attachmentForm },
+  );
+  const attachedPayload = await attached.json();
+  assert.equal(attached.status, 201);
+  const attachment = attachedPayload.job.interviews[0].attachments[0];
+  assert.equal(attachment.originalName, 'take-home.txt');
+  assert.equal(attachment.storedName, undefined);
+
+  const downloaded = await fetch(
+    `${baseUrl}/api/jobs/${jobId}/interviews/${interviewId}/attachments/${attachment._id}/file`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  assert.equal(downloaded.status, 200);
+  assert.match(await downloaded.text(), /take-home notes/);
+
+  const removed = await call('DELETE', `/api/jobs/${jobId}/interviews/${interviewId}`);
+  assert.equal(removed.payload.job.interviews.length, 0);
+});
+
 check('attaches a resume', async () => {
   const { status, payload } = await call('POST', `/api/jobs/${jobId}/resumes`, {
     name: 'AI Engineer v2',
@@ -234,6 +301,72 @@ check('validates input', async () => {
   const { status, payload } = await call('POST', '/api/jobs', { title: 'No company' });
   assert.equal(status, 400);
   assert.match(payload.error, /company name/i);
+});
+
+check('uploads a resume and downloads the same file', async () => {
+  const form = new FormData();
+  form.append(
+    'file',
+    new Blob([Buffer.from('%PDF-1.4 resume bytes')], { type: 'application/pdf' }),
+    'Alex Resume.pdf',
+  );
+
+  const created = await fetch(`${baseUrl}/api/resumes`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const createdPayload = await created.json();
+  assert.equal(created.status, 201);
+  assert.equal(createdPayload.resume.originalName, 'Alex Resume.pdf');
+  assert.equal(createdPayload.resume.name, 'Alex Resume');
+  assert.equal(createdPayload.resume.storedName, undefined);
+
+  const listed = await call('GET', '/api/resumes');
+  assert.equal(listed.status, 200);
+  assert.equal(listed.payload.resumes.length, 1);
+
+  const linked = await call('POST', `/api/jobs/${jobId}/resumes/link`, {
+    resumeId: createdPayload.resume._id,
+    isTailored: true,
+  });
+  assert.equal(linked.status, 201);
+  const linkedResume = linked.payload.job.resumes.find(
+    (item) => item.libraryResume === createdPayload.resume._id,
+  );
+  assert.ok(linkedResume);
+  assert.equal(linkedResume.name, 'Alex Resume');
+
+  const duplicate = await call('POST', `/api/jobs/${jobId}/resumes/link`, {
+    resumeId: createdPayload.resume._id,
+  });
+  assert.equal(duplicate.status, 400);
+
+  const file = await fetch(`${baseUrl}/api/resumes/${createdPayload.resume._id}/file`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(file.status, 200);
+  assert.match(await file.text(), /resume bytes/);
+
+  const rejected = new FormData();
+  rejected.append('file', new Blob(['notes'], { type: 'text/plain' }), 'notes.txt');
+  const bad = await fetch(`${baseUrl}/api/resumes`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: rejected,
+  });
+  assert.equal(bad.status, 400);
+
+  const removed = await call('DELETE', `/api/resumes/${createdPayload.resume._id}`);
+  assert.equal(removed.status, 204);
+  const after = await call('GET', '/api/resumes');
+  assert.equal(after.payload.resumes.length, 0);
+
+  const job = await call('GET', `/api/jobs/${jobId}`);
+  assert.equal(
+    job.payload.job.resumes.some((item) => item.libraryResume === createdPayload.resume._id),
+    false,
+  );
 });
 
 check('deletes a job and unlinks it from contacts', async () => {

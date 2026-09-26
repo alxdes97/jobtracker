@@ -4,19 +4,43 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useAuth } from './AuthProvider';
-import { BriefcaseIcon, BuildingIcon, LogoutIcon, UsersIcon } from './Icons';
+import {
+  BriefcaseIcon,
+  BuildingIcon,
+  DashboardIcon,
+  DocumentIcon,
+  LogoutIcon,
+  UsersIcon,
+} from './Icons';
 import { classNames } from '@/lib/format';
 
-const TABS = [
+const DASHBOARD_PAGES = [
   { href: '/jobs', label: 'Jobs', icon: BriefcaseIcon },
   { href: '/people', label: 'People', icon: UsersIcon },
   { href: '/companies', label: 'Companies', icon: BuildingIcon },
+];
+
+const SIDEBAR = [
+  {
+    href: '/jobs',
+    label: 'Dashboard',
+    icon: DashboardIcon,
+    active: (pathname: string) =>
+      DASHBOARD_PAGES.some((page) => pathname.startsWith(page.href)),
+  },
+  {
+    href: '/resumes',
+    label: 'Resumes',
+    icon: DocumentIcon,
+    active: (pathname: string) => pathname.startsWith('/resumes'),
+  },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const onDashboard = DASHBOARD_PAGES.some((page) => pathname.startsWith(page.href));
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -37,17 +61,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link
             href="/jobs"
             className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-700 text-sm font-bold text-white"
+            title="Dashboard"
           >
             J
           </Link>
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            const active = pathname.startsWith(tab.href);
+          {SIDEBAR.map((item) => {
+            const Icon = item.icon;
+            const active = item.active(pathname);
             return (
               <Link
-                key={tab.href}
-                href={tab.href}
-                title={tab.label}
+                key={item.label}
+                href={item.href}
+                title={item.label}
+                aria-label={item.label}
                 className={classNames(
                   'flex h-9 w-9 items-center justify-center rounded-md',
                   active ? 'bg-brand-50 text-brand-700' : 'text-slate-400 hover:bg-slate-100',
@@ -71,27 +97,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4">
-          <nav className="flex">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const active = pathname.startsWith(tab.href);
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className={classNames(
-                    'flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium',
-                    active
-                      ? 'border-brand-700 text-brand-800'
-                      : 'border-transparent text-slate-500 hover:text-slate-800',
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </Link>
-              );
-            })}
-          </nav>
+          {onDashboard ? (
+            <nav className="flex">
+              {DASHBOARD_PAGES.map((page) => {
+                const Icon = page.icon;
+                const active = pathname.startsWith(page.href);
+                return (
+                  <Link
+                    key={page.href}
+                    href={page.href}
+                    className={classNames(
+                      'flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium',
+                      active
+                        ? 'border-brand-700 text-brand-800'
+                        : 'border-transparent text-slate-500 hover:text-slate-800',
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {page.label}
+                  </Link>
+                );
+              })}
+            </nav>
+          ) : (
+            <span className="py-3 text-sm font-medium text-brand-800">Resumes</span>
+          )}
           <span className="hidden text-sm text-slate-500 sm:block">{user.name}</span>
         </header>
 

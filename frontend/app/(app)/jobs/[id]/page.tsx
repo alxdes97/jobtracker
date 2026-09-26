@@ -9,9 +9,11 @@ import { StatusStepper } from '@/components/jobs/StatusStepper';
 import { KeywordPanel } from '@/components/jobs/KeywordPanel';
 import { NotesPanel } from '@/components/jobs/NotesPanel';
 import { ChecklistPanel } from '@/components/jobs/ChecklistPanel';
+import { LinkResume } from '@/components/jobs/LinkResume';
 import { ResumesPanel } from '@/components/jobs/ResumesPanel';
 import { JobContactsPanel } from '@/components/jobs/JobContactsPanel';
 import { EmailTemplatesPanel } from '@/components/jobs/EmailTemplatesPanel';
+import { InterviewTracking } from '@/components/jobs/InterviewTracking';
 import {
   CheckSquareIcon,
   InfoIcon,
@@ -248,6 +250,47 @@ export default function JobDetailPage() {
             </div>
           </section>
 
+          <InterviewTracking
+            jobId={id}
+            interviews={job.interviews ?? []}
+            onAdd={async () => {
+              const response = await api.addInterview(id);
+              setJob(response.job);
+              return response.interviewId;
+            }}
+            onUpdate={async (interviewId, data) =>
+              setJob((await api.updateInterview(id, interviewId, data)).job)
+            }
+            onDelete={async (interviewId) => setJob((await api.deleteInterview(id, interviewId)).job)}
+            onAddInterviewer={async (interviewId, data) =>
+              setJob((await api.addInterviewer(id, interviewId, data)).job)
+            }
+            onDeleteInterviewer={async (interviewId, interviewerId) =>
+              setJob((await api.deleteInterviewer(id, interviewId, interviewerId)).job)
+            }
+            onAddConversation={async (interviewId, data) =>
+              setJob((await api.addConversation(id, interviewId, data)).job)
+            }
+            onDeleteConversation={async (interviewId, entryId) =>
+              setJob((await api.deleteConversation(id, interviewId, entryId)).job)
+            }
+            onAddFeedback={async (interviewId, body) =>
+              setJob((await api.addFeedback(id, interviewId, body)).job)
+            }
+            onDeleteFeedback={async (interviewId, feedbackId) =>
+              setJob((await api.deleteFeedback(id, interviewId, feedbackId)).job)
+            }
+            onAddAttachment={async (interviewId, file) =>
+              setJob((await api.uploadInterviewAttachment(id, interviewId, file)).job)
+            }
+            onDeleteAttachment={async (interviewId, attachmentId) =>
+              setJob((await api.deleteInterviewAttachment(id, interviewId, attachmentId)).job)
+            }
+            onAddPractice={async (interviewId, notes) =>
+              setJob((await api.addPracticeSession(id, interviewId, notes)).job)
+            }
+          />
+
           <section className="card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-800">Job Description &amp; Keywords</h3>
@@ -328,6 +371,14 @@ export default function JobDetailPage() {
                   onBlur={(event) => patch({ url: event.target.value })}
                 />
               </div>
+              <div className="border-t border-slate-100 pt-3">
+                <h4 className="mb-2 text-sm font-semibold text-slate-800">Resume</h4>
+                <LinkResume
+                  resumes={job.resumes}
+                  onLink={async (resumeId) => setJob((await api.linkLibraryResume(id, resumeId)).job)}
+                  onUnlink={async (resumeId) => setJob((await api.deleteResume(id, resumeId)).job)}
+                />
+              </div>
               <dl className="space-y-1 border-t border-slate-100 pt-3 text-sm text-slate-600">
                 <div className="flex justify-between">
                   <dt>Keywords found</dt>
@@ -353,6 +404,7 @@ export default function JobDetailPage() {
             <ResumesPanel
               resumes={job.resumes}
               onAdd={async (data) => setJob((await api.addResume(id, data)).job)}
+              onLink={async (resumeId) => setJob((await api.linkLibraryResume(id, resumeId)).job)}
               onDelete={async (resumeId) => setJob((await api.deleteResume(id, resumeId)).job)}
             />
           ) : null}

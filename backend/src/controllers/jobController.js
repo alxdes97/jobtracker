@@ -1,10 +1,34 @@
+import path from 'node:path';
 import { Job } from '../models/Job.js';
 import { Company } from '../models/Company.js';
 import { Contact } from '../models/Contact.js';
+import { Resume } from '../models/Resume.js';
 import { ApiError, asyncHandler } from '../utils/apiError.js';
-import { GUIDANCE_CHECKLIST, JOB_STATUSES } from '../constants.js';
+import { GUIDANCE_CHECKLIST, INTERVIEW_FORMATS, INTERVIEW_TYPES, JOB_STATUSES } from '../constants.js';
 import { extractKeywords } from '../utils/keywords.js';
 import { toCsv } from '../utils/csv.js';
+import {
+  createUpload,
+  displayName,
+  extensionOf,
+  removeStoredFile,
+  sendStoredFile,
+} from '../utils/uploads.js';
+
+const ATTACHMENT_TYPES = new Map([
+  ['.pdf', 'application/pdf'],
+  ['.doc', 'application/msword'],
+  ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.txt', 'text/plain'],
+]);
+
+export const interviewAttachmentUpload = createUpload(
+  ATTACHMENT_TYPES,
+  'Upload a PDF, Word document, image, or text file',
+);
 
 const EDITABLE_FIELDS = [
   'title',
@@ -27,12 +51,21 @@ const EDITABLE_FIELDS = [
 const DATE_FIELDS = new Set(['dateSaved', 'dateApplied', 'deadline', 'followUp']);
 const NUMBER_FIELDS = new Set(['salaryMin', 'salaryMax', 'excitement']);
 
+/** `<input type="date">` sends YYYY-MM-DD. Parse that as a local calendar day. */
+function parseCalendarDate(value, field) {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw ApiError.badRequest(`${field} is not a valid date`);
+  return date;
+}
+
 function coerce(field, value) {
   if (value === '' || value === null) return DATE_FIELDS.has(field) || NUMBER_FIELDS.has(field) ? null : '';
   if (DATE_FIELDS.has(field)) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) throw ApiError.badRequest(`${field} is not a valid date`);
-    return date;
+    return parseCalendarDate(value, field);
   }
   if (NUMBER_FIELDS.has(field)) {
     const num = Number(value);
@@ -70,6 +103,10 @@ function withDerived(jobDoc) {
   const job = jobDoc.toJSON ? jobDoc.toJSON() : jobDoc;
   const stageItems = job.checklist.filter((item) => item.stage === job.status);
   const doneCount = stageItems.filter((item) => item.done).length;
+  for (const interview of job.interviews || []) {
+    for (const attachment of interview.attachments || []) delete attachment.storedName;
+  }
+
   return {
     ...job,
     keywords: extractKeywords(job.description),
@@ -247,6 +284,258 @@ export const deleteChecklistItem = asyncHandler(async (req, res) => {
   res.json({ job: withDerived(job) });
 });
 
+function parseInterviewDate(value) {
+  if (value === '' || value === null) return null;
+  return parseCalendarDate(value, 'Interview date');
+}
+
+export const addInterview = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  job.interviews.push({});
+  await job.save();
+  const interview = job.interviews[job.interviews.length - 1];
+  res.status(201).json({ job: withDerived(job), interviewId: interview._id });
+});
+
+export const updateInterview = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  if ('date' in req.body) interview.date = parseInterviewDate(req.body.date);
+  if ('type' in req.body) {
+    const type = String(req.body.type ?? '');
+    if (type && !INTERVIEW_TYPES.includes(type)) throw ApiError.badRequest('Unknown interview type');
+    interview.type = type;
+  }
+  if ('format' in req.body) {
+    const format = String(req.body.format ?? '');
+    if (format && !INTERVIEW_FORMATS.includes(format)) {
+      throw ApiError.badRequest('Unknown interview format');
+    }
+    interview.format = format;
+  }
+
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const deleteInterview = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  const storedNames = (interview.attachments || []).map((attachment) => attachment.storedName);
+  interview.deleteOne();
+  await job.save();
+  await Promise.all(storedNames.map((storedName) => removeStoredFile(storedName)));
+  res.json({ job: withDerived(job) });
+});
+
+export const addInterviewer = asyncHandler(async (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) throw ApiError.badRequest('Interviewer name is required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  interview.interviewers.push({ name, title: String(req.body.title || '').trim() });
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const deleteInterviewer = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  const interviewer = interview.interviewers.id(req.params.interviewerId);
+  if (!interviewer) throw ApiError.notFound('Interviewer not found');
+
+  interviewer.deleteOne();
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const addConversationEntry = asyncHandler(async (req, res) => {
+  const message = String(req.body.message || '').trim();
+  if (!message) throw ApiError.badRequest('Conversation message is required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  if (!interview.conversation) interview.conversation = [];
+  interview.conversation.push({
+    speaker: String(req.body.speaker || '').trim(),
+    message,
+  });
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const deleteConversationEntry = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  const entry = interview.conversation.id(req.params.entryId);
+  if (!entry) throw ApiError.notFound('Conversation entry not found');
+
+  entry.deleteOne();
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const addFeedback = asyncHandler(async (req, res) => {
+  const body = String(req.body.body || '').trim();
+  if (!body) throw ApiError.badRequest('Feedback is required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  if (!interview.feedback) interview.feedback = [];
+  interview.feedback.push({ body });
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const deleteFeedback = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  const note = interview.feedback.id(req.params.feedbackId);
+  if (!note) throw ApiError.notFound('Feedback not found');
+
+  note.deleteOne();
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const addPracticeSession = asyncHandler(async (req, res) => {
+  const notes = String(req.body.notes || '').trim();
+  if (!notes) throw ApiError.badRequest('Practice notes are required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  interview.practiceSessions.push({ notes });
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const addInterviewAttachment = asyncHandler(async (req, res) => {
+  if (!req.file) throw ApiError.badRequest('Choose a file to attach');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) {
+    await removeStoredFile(req.file.filename);
+    throw ApiError.notFound('Job not found');
+  }
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) {
+    await removeStoredFile(req.file.filename);
+    throw ApiError.notFound('Interview not found');
+  }
+
+  const originalName = path.basename(req.file.originalname).slice(0, 180);
+  if (!interview.attachments) interview.attachments = [];
+  interview.attachments.push({
+    name: displayName(originalName),
+    originalName,
+    mimeType: ATTACHMENT_TYPES.get(extensionOf(originalName)),
+    size: req.file.size,
+    storedName: req.file.filename,
+  });
+
+  try {
+    await job.save();
+  } catch (error) {
+    await removeStoredFile(req.file.filename);
+    throw error;
+  }
+
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const downloadInterviewAttachment = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  const attachment = interview.attachments.id(req.params.attachmentId);
+  if (!attachment) throw ApiError.notFound('Attachment not found');
+
+  await sendStoredFile(res, attachment.storedName, attachment.originalName);
+});
+
+export const deleteInterviewAttachment = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  const attachment = interview.attachments.id(req.params.attachmentId);
+  if (!attachment) throw ApiError.notFound('Attachment not found');
+
+  const storedName = attachment.storedName;
+  attachment.deleteOne();
+  await job.save();
+  await removeStoredFile(storedName);
+  res.json({ job: withDerived(job) });
+});
+
+export const linkLibraryResume = asyncHandler(async (req, res) => {
+  const resume = await Resume.findOne({ _id: req.body.resumeId, user: req.user._id });
+  if (!resume) throw ApiError.notFound('Resume not found');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const alreadyLinked = job.resumes.some(
+    (item) => item.libraryResume && String(item.libraryResume) === String(resume._id),
+  );
+  if (alreadyLinked) throw ApiError.badRequest('That resume is already linked to this job');
+
+  job.resumes.push({
+    name: resume.name,
+    originalName: resume.originalName,
+    url: '',
+    isTailored: Boolean(req.body.isTailored),
+    libraryResume: resume._id,
+  });
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
 export const addResume = asyncHandler(async (req, res) => {
   const { name, url = '', isTailored = false } = req.body;
   if (!name?.trim()) throw ApiError.badRequest('Resume name is required');
@@ -306,7 +595,11 @@ export const unlinkContact = asyncHandler(async (req, res) => {
 export const deleteJob = asyncHandler(async (req, res) => {
   const job = await Job.findOneAndDelete({ _id: req.params.id, user: req.user._id });
   if (!job) throw ApiError.notFound('Job not found');
+  const storedNames = (job.interviews || []).flatMap((interview) =>
+    (interview.attachments || []).map((attachment) => attachment.storedName),
+  );
   await Contact.updateMany({ user: req.user._id }, { $pull: { relatedJobs: job._id } });
+  await Promise.all(storedNames.map((storedName) => removeStoredFile(storedName)));
   res.status(204).end();
 });
 
