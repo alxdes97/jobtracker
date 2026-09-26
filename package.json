@@ -1,0 +1,26 @@
+{
+  "name": "job-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Job application tracker with a Node.js/Express API, Next.js frontend and MongoDB",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:memory": "concurrently -n api,web -c cyan,magenta \"npm run dev:memory -w backend\" \"npm run dev -w frontend\"",
+    "dev:api": "npm run dev -w backend",
+    "dev:web": "npm run dev -w frontend",
+    "build": "npm run build -w frontend",
+    "start": "concurrently -n api,web -c cyan,magenta \"npm run start -w backend\" \"npm run start -w frontend\"",
+    "seed": "npm run seed -w backend",
+    "lint": "npm run lint -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}
