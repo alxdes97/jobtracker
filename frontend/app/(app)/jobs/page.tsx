@@ -7,7 +7,8 @@ import { JobTable } from '@/components/jobs/JobTable';
 import { AddJobModal } from '@/components/jobs/AddJobModal';
 import { BoardIcon, DownloadIcon, ListIcon, PlusIcon, SearchIcon } from '@/components/Icons';
 import { api, downloadExport } from '@/lib/api';
-import { PIPELINE_STATUSES, type Job, type JobStatus } from '@/lib/types';
+import { jobsForProfile } from '@/lib/resumeProfile';
+import { PIPELINE_STATUSES, type Job, type JobStatus, type ResumeFile } from '@/lib/types';
 import { classNames } from '@/lib/format';
 
 export default function JobsPage() {
@@ -18,6 +19,8 @@ export default function JobsPage() {
   const [view, setView] = useState<'board' | 'list'>('board');
   const [statusFilter, setStatusFilter] = useState<JobStatus | null>(null);
   const [modalStatus, setModalStatus] = useState<JobStatus | null>(null);
+  const [resumes, setResumes] = useState<ResumeFile[]>([]);
+  const [profile, setProfile] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -33,26 +36,41 @@ export default function JobsPage() {
 
   useEffect(() => {
     load();
+    setProfile(window.localStorage.getItem('job-tracker-profile') || '');
+    api
+      .listResumes()
+      .then((response) => setResumes(response.resumes))
+      .catch(() => setResumes([]));
   }, [load]);
+
+  const scopedJobs = useMemo(
+    () => (profile ? jobsForProfile(jobs, resumes, profile) : jobs),
+    [jobs, resumes, profile],
+  );
 
   const counts = useMemo(() => {
     const result: Record<string, number> = Object.fromEntries(
       PIPELINE_STATUSES.map((status) => [status, 0]),
     );
-    for (const job of jobs) result[job.status] = (result[job.status] ?? 0) + 1;
+    for (const job of scopedJobs) result[job.status] = (result[job.status] ?? 0) + 1;
     return result;
-  }, [jobs]);
+  }, [scopedJobs]);
 
   const visibleJobs = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return jobs.filter((job) => {
+    return scopedJobs.filter((job) => {
       if (statusFilter && job.status !== statusFilter) return false;
       if (!term) return true;
       return [job.title, job.companyName, job.location]
         .filter(Boolean)
         .some((field) => field.toLowerCase().includes(term));
     });
-  }, [jobs, search, statusFilter]);
+  }, [scopedJobs, search, statusFilter]);
+
+  function clearProfile() {
+    window.localStorage.removeItem('job-tracker-profile');
+    setProfile('');
+  }
 
   async function handleMove(jobId: string, status: JobStatus, order: number) {
     const previous = jobs;
@@ -95,6 +113,15 @@ export default function JobsPage() {
   return (
     <div className="flex h-full flex-col gap-3 p-4">
       <PipelineHeader counts={counts} activeStatus={statusFilter} onSelect={setStatusFilter} />
+
+      {profile ? (
+        <p className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+          <span>Showing jobs for {profile}</span>
+          <button type="button" className="text-brand-700 hover:underline" onClick={clearProfile}>
+            Show all
+          </button>
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="relative">

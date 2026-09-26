@@ -35,7 +35,7 @@ export const createResume = asyncHandler(async (req, res) => {
   try {
     const resume = await Resume.create({
       user: req.user._id,
-      name: displayName(originalName),
+      name: String(req.body.profileName || '').trim().slice(0, 180) || displayName(originalName),
       originalName,
       mimeType,
       size: req.file.size,
@@ -46,6 +46,18 @@ export const createResume = asyncHandler(async (req, res) => {
     await removeStoredFile(storedName);
     throw error;
   }
+});
+
+export const updateResume = asyncHandler(async (req, res) => {
+  const profileName = String(req.body.profileName ?? req.body.name ?? '').trim().slice(0, 180);
+  if (!profileName) throw ApiError.badRequest('Profile name is required');
+
+  const resume = await Resume.findOne({ _id: req.params.id, user: req.user._id });
+  if (!resume) throw ApiError.notFound('Resume not found');
+
+  resume.name = profileName;
+  await resume.save();
+  res.json({ resume });
 });
 
 export const downloadResume = asyncHandler(async (req, res) => {

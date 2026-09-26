@@ -87,6 +87,8 @@ router.post('/jobs/:id/resumes', jobs.addResume);
 router.delete('/jobs/:id/resumes/:resumeId', jobs.deleteResume);
 router.post('/jobs/:id/contacts', jobs.linkContact);
 router.delete('/jobs/:id/contacts/:contactId', jobs.unlinkContact);
+router.put('/jobs/:id/company', jobs.connectCompany);
+router.delete('/jobs/:id/company', jobs.disconnectCompany);
 
 router.get('/contacts', contacts.listContacts);
 router.post('/contacts', contacts.createContact);
@@ -104,6 +106,7 @@ router.delete('/companies/:id', companies.deleteCompany);
 
 router.get('/resumes', resumes.listResumes);
 router.post('/resumes', resumes.resumeUpload, resumes.createResume);
+router.patch('/resumes/:id', resumes.updateResume);
 router.get('/resumes/:id/file', resumes.downloadResume);
 router.delete('/resumes/:id', resumes.deleteResume);
 

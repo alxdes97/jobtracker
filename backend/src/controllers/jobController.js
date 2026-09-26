@@ -175,8 +175,11 @@ export const createJob = asyncHandler(async (req, res) => {
     .sort({ order: -1 })
     .select('order');
 
+  const editable = pickEditable(req.body);
+  const createdOn = editable.dateSaved || new Date();
+
   const job = await Job.create({
-    ...pickEditable(req.body),
+    ...editable,
     title,
     companyName,
     status: jobStatus,
@@ -184,6 +187,8 @@ export const createJob = asyncHandler(async (req, res) => {
     company: await linkCompany(req.user._id, companyName),
     order: (last?.order ?? -1) + 1,
     checklist: guidanceFor(jobStatus),
+    dateSaved: createdOn,
+    dateApplied: editable.dateApplied || createdOn,
   });
 
   res.status(201).json({ job: withDerived(job) });
@@ -639,6 +644,38 @@ export const deleteResume = asyncHandler(async (req, res) => {
   resume.deleteOne();
   await job.save();
   res.json({ job: withDerived(job) });
+});
+
+const CONTACT_FIELDS = 'firstName lastName jobTitle email companyName linkedin';
+
+async function jobWithContacts(id) {
+  return Job.findById(id).populate('contacts', CONTACT_FIELDS);
+}
+
+export const connectCompany = asyncHandler(async (req, res) => {
+  const company = await Company.findOne({ _id: req.body.companyId, user: req.user._id });
+  if (!company) throw ApiError.notFound('Company not found');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  job.company = company._id;
+  job.companyName = company.name;
+  await job.save();
+
+  const updated = await jobWithContacts(job._id);
+  res.json({ job: withDerived(updated) });
+});
+
+export const disconnectCompany = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  job.company = null;
+  await job.save();
+
+  const updated = await jobWithContacts(job._id);
+  res.json({ job: withDerived(updated) });
 });
 
 export const linkContact = asyncHandler(async (req, res) => {

@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useAuth } from '@/components/AuthProvider';
-import type { Interview, Job } from '@/lib/types';
+import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
+import { jobProfileNames } from '@/lib/resumeProfile';
+import type { Interview, Job, ResumeFile } from '@/lib/types';
 import { formatDate } from '@/lib/format';
 
 interface InterviewPortalProps {
@@ -39,8 +41,12 @@ function interviewSummary(interview: Interview) {
 }
 
 export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
-  const { user } = useAuth();
+  const [resumes, setResumes] = useState<ResumeFile[]>([]);
   const interviewing = jobs.filter((job) => job.status === 'Interviewing');
+
+  useEffect(() => {
+    api.listResumes().then((response) => setResumes(response.resumes)).catch(() => setResumes([]));
+  }, [jobs]);
   const furthest = interviewing.reduce(
     (max, job) => Math.max(max, job.interviews?.length ?? 0),
     0,
@@ -95,8 +101,10 @@ export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
                             style={titleBarStyle(index, stepCount)}
                           >
                             <h4 className="text-sm font-medium">{job.title}</h4>
-                            {user?.name ? (
-                              <p className="mt-0.5 truncate text-xs opacity-80">{user.name}</p>
+                            {jobProfileNames(job, resumes).length > 0 ? (
+                              <p className="mt-0.5 truncate text-xs opacity-80">
+                                {jobProfileNames(job, resumes).join(', ')}
+                              </p>
                             ) : null}
                           </div>
                         </Link>

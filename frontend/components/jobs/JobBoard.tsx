@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useRef, useState } from 'react';
-import { useAuth } from '@/components/AuthProvider';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DotsIcon, PlusIcon } from '@/components/Icons';
 import { StarRating } from '@/components/StarRating';
 import { InterviewPortal } from '@/components/jobs/InterviewPortal';
-import { PIPELINE_STATUSES, type Job, type JobStatus } from '@/lib/types';
+import { api } from '@/lib/api';
+import { jobProfileNames } from '@/lib/resumeProfile';
+import { PIPELINE_STATUSES, type Job, type JobStatus, type ResumeFile } from '@/lib/types';
 import { classNames, formatDate } from '@/lib/format';
 import { useDismiss } from '@/lib/useDismiss';
 
@@ -40,7 +41,7 @@ function titleBarStyle(status: JobStatus) {
 }
 
 export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
-  const { user } = useAuth();
+  const [resumes, setResumes] = useState<ResumeFile[]>([]);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<JobStatus | null>(null);
   const [openMenu, setOpenMenu] = useState<JobStatus | null>(null);
@@ -50,6 +51,10 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
   const menuRef = useRef<HTMLElement>(null);
 
   useDismiss(menuRef, openMenu !== null, () => setOpenMenu(null));
+
+  useEffect(() => {
+    api.listResumes().then((response) => setResumes(response.resumes)).catch(() => setResumes([]));
+  }, [jobs]);
 
   // "Close Job" on a job page parks it outside the pipeline, so the column only
   // appears once something is in it — otherwise those jobs would be unreachable.
@@ -237,8 +242,10 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                         style={titleBarStyle(job.status)}
                       >
                         <h4 className="text-sm font-medium">{job.title}</h4>
-                        {user?.name ? (
-                          <p className="mt-0.5 truncate text-xs opacity-80">{user.name}</p>
+                        {jobProfileNames(job, resumes).length > 0 ? (
+                          <p className="mt-0.5 truncate text-xs opacity-80">
+                            {jobProfileNames(job, resumes).join(', ')}
+                          </p>
                         ) : null}
                       </div>
                       <p className="px-3 pt-2 text-xs text-slate-500">

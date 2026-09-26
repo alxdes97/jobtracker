@@ -280,6 +280,32 @@ check('creates a contact and links it to the job both ways', async () => {
   assert.equal(contact.payload.contact.relatedJobs.length, 1);
 });
 
+check('connects a company from the directory and can disconnect it', async () => {
+  const created = await call('POST', '/api/companies', {
+    name: 'Northwind Labs',
+    industry: 'Software',
+    location: 'Remote',
+  });
+  assert.equal(created.status, 201);
+  const companyId = created.payload.company._id;
+
+  const connected = await call('PUT', `/api/jobs/${jobId}/company`, { companyId });
+  assert.equal(connected.status, 200);
+  assert.equal(connected.payload.job.company, companyId);
+  assert.equal(connected.payload.job.companyName, 'Northwind Labs');
+  assert.equal(connected.payload.job.contacts[0].firstName, 'Stephanie');
+
+  const listed = await call('GET', '/api/companies');
+  const northwind = listed.payload.companies.find((company) => company._id === companyId);
+  assert.equal(northwind.jobCount, 1);
+
+  const disconnected = await call('DELETE', `/api/jobs/${jobId}/company`);
+  assert.equal(disconnected.payload.job.company, null);
+  assert.equal(disconnected.payload.job.companyName, 'Northwind Labs');
+
+  await call('PATCH', `/api/jobs/${jobId}`, { companyName: 'Stride' });
+});
+
 check('returns populated contacts after a stage move', async () => {
   const { payload } = await call('PATCH', `/api/jobs/${jobId}/move`, {
     status: 'Interviewing',

@@ -13,9 +13,11 @@ import { TodoPanel } from '@/components/jobs/TodoPanel';
 import { LinkResume } from '@/components/jobs/LinkResume';
 import { ResumesPanel } from '@/components/jobs/ResumesPanel';
 import { JobContactsPanel } from '@/components/jobs/JobContactsPanel';
+import { JobCompaniesPanel } from '@/components/jobs/JobCompaniesPanel';
 import { EmailTemplatesPanel } from '@/components/jobs/EmailTemplatesPanel';
 import { InterviewTracking } from '@/components/jobs/InterviewTracking';
 import {
+  BuildingIcon,
   CheckSquareIcon,
   InfoIcon,
   ListIcon,
@@ -34,6 +36,7 @@ const TABS = [
   { key: 'notes', label: 'Notes', icon: NoteIcon },
   { key: 'resumes', label: 'Resumes', icon: PaperclipIcon },
   { key: 'contacts', label: 'Contacts', icon: UsersIcon },
+  { key: 'companies', label: 'Companies', icon: BuildingIcon },
   { key: 'templates', label: 'Email Templates', icon: MailIcon },
   { key: 'checklist', label: 'Check List', icon: CheckSquareIcon },
   { key: 'todo', label: 'To Do', icon: ListIcon },
@@ -428,6 +431,15 @@ export default function JobDetailPage() {
               contacts={job.contacts}
               onLink={async (contactId) => setJob((await api.linkContact(id, contactId)).job)}
               onUnlink={async (contactId) => setJob((await api.unlinkContact(id, contactId)).job)}
+            />
+          ) : null}
+
+          {tab === 'companies' ? (
+            <JobCompaniesPanel
+              companyId={job.company}
+              companyName={job.companyName}
+              onConnect={async (companyId) => setJob((await api.connectCompany(id, companyId)).job)}
+              onDisconnect={async () => setJob((await api.disconnectCompany(id)).job)}
             />
           ) : null}
 

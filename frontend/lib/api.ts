@@ -190,6 +190,10 @@ export const api = {
     request<{ job: Job }>(`/jobs/${id}/contacts`, { method: 'POST', body: body({ contactId }) }),
   unlinkContact: (id: string, contactId: string) =>
     request<{ job: Job }>(`/jobs/${id}/contacts/${contactId}`, { method: 'DELETE' }),
+  connectCompany: (id: string, companyId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/company`, { method: 'PUT', body: body({ companyId }) }),
+  disconnectCompany: (id: string) =>
+    request<{ job: Job }>(`/jobs/${id}/company`, { method: 'DELETE' }),
 
   listContacts: (params: { search?: string; groupBy?: string } = {}) => {
     const query = new URLSearchParams(
@@ -217,10 +221,16 @@ export const api = {
   deleteCompany: (id: string) => request<void>(`/companies/${id}`, { method: 'DELETE' }),
 
   listResumes: () => request<{ resumes: ResumeFile[] }>('/resumes'),
-  uploadResume: async (file: File) => {
+  updateResume: (id: string, profileName: string) =>
+    request<{ resume: ResumeFile }>(`/resumes/${id}`, {
+      method: 'PATCH',
+      body: body({ profileName }),
+    }),
+  uploadResume: async (file: File, profileName?: string) => {
     const token = tokenStore.get();
     const form = new FormData();
     form.append('file', file);
+    if (profileName?.trim()) form.append('profileName', profileName.trim());
     const response = await fetch(`${API_URL}/resumes`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
