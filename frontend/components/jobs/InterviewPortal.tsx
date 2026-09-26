@@ -64,11 +64,9 @@ export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
       <div className="flex flex-1 gap-3 overflow-x-auto pb-4">
         {Array.from({ length: stepCount }, (_, index) => {
           const cards = interviewing.flatMap((job) => {
-            const interviews = job.interviews ?? [];
-            // The job sits in the latest step saved on its Interview Tracking page.
-            const currentIndex = Math.max(0, interviews.length - 1);
-            if (currentIndex !== index) return [];
-            return [{ job, interview: interviews[currentIndex] ?? null }];
+            const interview = job.interviews?.[index];
+            if (!interview) return [];
+            return [{ job, interview }];
           });
 
           return (
@@ -85,10 +83,10 @@ export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
                   <p className="py-8 text-center text-xs text-slate-400">No interviews</p>
                 ) : (
                   cards.map(({ job, interview }) => {
-                    const summary = interview ? interviewSummary(interview) : null;
+                    const summary = interviewSummary(interview);
                     return (
                       <article
-                        key={interview ? interview._id : job._id}
+                        key={interview._id}
                         className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"
                       >
                         <Link href={`/jobs/${job._id}`} className="block">
@@ -107,14 +105,8 @@ export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
                             {job.companyName}
                             {job.location ? ` · ${job.location}` : ''}
                           </p>
-                          {summary ? (
-                            <>
-                              <p>{summary.parts.length > 0 ? summary.parts.join(' · ') : 'Details not set'}</p>
-                              {summary.people.length > 0 ? <p>{summary.people.join(', ')}</p> : null}
-                            </>
-                          ) : (
-                            <p className="text-slate-400">Not scheduled</p>
-                          )}
+                          <p>{summary.parts.length > 0 ? summary.parts.join(' · ') : 'Details not set'}</p>
+                          {summary.people.length > 0 ? <p>{summary.people.join(', ')}</p> : null}
                         </div>
                       </article>
                     );
