@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { DotsIcon, PlusIcon } from '@/components/Icons';
 import { StarRating } from '@/components/StarRating';
+import { InterviewPortal } from '@/components/jobs/InterviewPortal';
 import { PIPELINE_STATUSES, type Job, type JobStatus } from '@/lib/types';
 import { classNames, formatDate } from '@/lib/format';
 import { useDismiss } from '@/lib/useDismiss';
@@ -45,6 +46,7 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
   const [openMenu, setOpenMenu] = useState<JobStatus | null>(null);
   const [hidden, setHidden] = useState<JobStatus[]>([]);
   const [sorts, setSorts] = useState<Partial<Record<JobStatus, ColumnSort>>>({});
+  const [trackerOpen, setTrackerOpen] = useState(false);
   const menuRef = useRef<HTMLElement>(null);
 
   useDismiss(menuRef, openMenu !== null, () => setOpenMenu(null));
@@ -105,7 +107,11 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
         </div>
       ) : null}
 
-      <div className="flex flex-1 gap-3 overflow-x-auto pb-4">
+      {trackerOpen ? (
+        <InterviewPortal jobs={jobs} onClose={() => setTrackerOpen(false)} />
+      ) : null}
+
+      <div className={classNames('flex flex-1 gap-3 overflow-x-auto pb-4', trackerOpen && 'hidden')}>
         {visibleColumns.map((status) => {
           const columnJobs = grouped.get(status) ?? [];
           return (
@@ -127,7 +133,17 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                 className="relative flex items-center justify-between border-b border-slate-200 px-3 py-2"
               >
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-slate-800">{status}</h3>
+                  {status === 'Interviewing' ? (
+                    <button
+                      type="button"
+                      className="text-sm font-semibold text-slate-800 hover:text-brand-800 hover:underline"
+                      onClick={() => setTrackerOpen(true)}
+                    >
+                      {status}
+                    </button>
+                  ) : (
+                    <h3 className="text-sm font-semibold text-slate-800">{status}</h3>
+                  )}
                   <span className="text-xs text-slate-400">{columnJobs.length}</span>
                 </div>
                 <div className="flex items-center gap-1">
