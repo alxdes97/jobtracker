@@ -250,6 +250,7 @@ export default function JobDetailPage() {
             </div>
           </section>
 
+          {job.status === 'Interviewing' ? (
           <InterviewTracking
             jobId={id}
             interviews={job.interviews ?? []}
@@ -290,6 +291,7 @@ export default function JobDetailPage() {
               setJob((await api.addPracticeSession(id, interviewId, notes)).job)
             }
           />
+          ) : null}
 
           <section className="card p-4">
             <div className="mb-3 flex items-center justify-between">

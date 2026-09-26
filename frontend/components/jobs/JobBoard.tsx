@@ -22,6 +22,21 @@ const SORT_LABELS: Record<Exclude<ColumnSort, 'manual'>, string> = {
   date: 'Sort by date',
 };
 
+/** Later pipeline steps push the title bar from white toward red. */
+const TITLE_BAR_STEPS: JobStatus[] = [...PIPELINE_STATUSES, 'Closed'];
+
+function titleBarStyle(status: JobStatus) {
+  const index = Math.max(0, TITLE_BAR_STEPS.indexOf(status));
+  const progress = index / (TITLE_BAR_STEPS.length - 1);
+  const red = Math.round(255 - 35 * progress);
+  const green = Math.round(255 - 202 * progress);
+  const blue = Math.round(255 - 186 * progress);
+  return {
+    backgroundColor: `rgb(${red}, ${green}, ${blue})`,
+    color: progress >= 0.7 ? '#ffffff' : '#0f172a',
+  };
+}
+
 export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<JobStatus | null>(null);
@@ -194,18 +209,23 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                       handleDrop(status, index);
                     }}
                     className={classNames(
-                      'cursor-grab rounded-md border border-slate-200 bg-white p-3 shadow-sm transition hover:border-brand-300 hover:shadow',
+                      'cursor-grab overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition hover:border-brand-300 hover:shadow',
                       dragging === job._id && 'opacity-40',
                     )}
                   >
                     <Link href={`/jobs/${job._id}`} className="block">
-                      <h4 className="text-sm font-medium text-slate-900">{job.title}</h4>
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <h4
+                        className="border-b border-black/10 px-3 py-2 text-sm font-medium"
+                        style={titleBarStyle(job.status)}
+                      >
+                        {job.title}
+                      </h4>
+                      <p className="px-3 pt-2 text-xs text-slate-500">
                         {job.companyName}
                         {job.location ? ` · ${job.location}` : ''}
                       </p>
                     </Link>
-                    <div className="mt-2 flex items-center justify-between">
+                    <div className="mt-2 flex items-center justify-between px-3 pb-3">
                       <StarRating value={job.excitement} />
                       <span className="text-[11px] text-slate-400">{formatDate(job.dateSaved)}</span>
                     </div>
