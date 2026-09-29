@@ -153,6 +153,7 @@ export interface Job {
   todos: TodoItem[];
   interviews: Interview[];
   resumes: JobResume[];
+  attachments: InterviewAttachment[];
   contacts: JobContact[];
   archived: boolean;
   createdAt: string;

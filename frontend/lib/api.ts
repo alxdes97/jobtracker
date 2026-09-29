@@ -175,6 +175,21 @@ export const api = {
     request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/attachments/${attachmentId}`, {
       method: 'DELETE',
     }),
+  uploadJobAttachment: async (id: string, file: File) => {
+    const token = tokenStore.get();
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch(`${API_URL}/jobs/${id}/attachments`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new ApiError(response.status, payload?.error || 'Upload failed');
+    return payload as { job: Job };
+  },
+  deleteJobAttachment: (id: string, attachmentId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/attachments/${attachmentId}`, { method: 'DELETE' }),
 
   addResume: (id: string, data: { name: string; url?: string; isTailored?: boolean }) =>
     request<{ job: Job }>(`/jobs/${id}/resumes`, { method: 'POST', body: body(data) }),
@@ -266,6 +281,24 @@ export async function downloadInterviewAttachment(
     `${API_URL}/jobs/${jobId}/interviews/${interviewId}/attachments/${attachmentId}/file`,
     { headers: token ? { Authorization: `Bearer ${token}` } : {} },
   );
+  if (!response.ok) throw new ApiError(response.status, 'Could not download that attachment');
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function downloadJobAttachment(jobId: string, attachmentId: string, filename: string) {
+  const token = tokenStore.get();
+  const response = await fetch(`${API_URL}/jobs/${jobId}/attachments/${attachmentId}/file`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!response.ok) throw new ApiError(response.status, 'Could not download that attachment');
 
   const blob = await response.blob();

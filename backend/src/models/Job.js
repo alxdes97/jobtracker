@@ -138,6 +138,7 @@ const jobSchema = new mongoose.Schema(
     todos: { type: [todoItemSchema], default: [] },
     interviews: { type: [interviewSchema], default: [] },
     resumes: { type: [resumeSchema], default: [] },
+    attachments: { type: [attachmentSchema], default: [] },
     contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Contact' }],
     statusHistory: { type: [statusEventSchema], default: [] },
     archived: { type: Boolean, default: false },

@@ -599,6 +599,67 @@ export const deleteInterviewAttachment = asyncHandler(async (req, res) => {
   res.json({ job: withDerived(job) });
 });
 
+function jobFilePrefix(job, accountName) {
+  const profile = (job.resumes || []).map((item) => String(item.name || '').trim()).find(Boolean);
+  return jobAttachmentPrefix(profile || accountName, job.title);
+}
+
+export const addJobAttachment = asyncHandler(async (req, res) => {
+  if (!req.file) throw ApiError.badRequest('Choose a file to attach');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const originalName = path.basename(req.file.originalname).slice(0, 180);
+  const mimeType = ATTACHMENT_TYPES.get(extensionOf(originalName));
+  const storedName = await saveUploadedFile(req.file, jobFilePrefix(job, req.user.name), mimeType);
+
+  if (!job.attachments) job.attachments = [];
+  job.attachments.push({
+    name: displayName(originalName),
+    originalName,
+    mimeType,
+    size: req.file.size,
+    storedName,
+  });
+
+  try {
+    await job.save();
+  } catch (error) {
+    await removeStoredFile(storedName);
+    throw error;
+  }
+
+  const updated = await jobWithContacts(job._id);
+  res.status(201).json({ job: withDerived(updated) });
+});
+
+export const downloadJobAttachment = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const attachment = job.attachments?.id(req.params.attachmentId);
+  if (!attachment) throw ApiError.notFound('Attachment not found');
+
+  await sendStoredFile(res, attachment.storedName, attachment.originalName);
+});
+
+export const deleteJobAttachment = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const attachment = job.attachments?.id(req.params.attachmentId);
+  if (!attachment) throw ApiError.notFound('Attachment not found');
+
+  const storedName = attachment.storedName;
+  attachment.deleteOne();
+  await job.save();
+  await removeStoredFile(storedName);
+
+  const updated = await jobWithContacts(job._id);
+  res.json({ job: withDerived(updated) });
+});
+
 export const linkLibraryResume = asyncHandler(async (req, res) => {
   const resume = await Resume.findOne({ _id: req.body.resumeId, user: req.user._id });
   if (!resume) throw ApiError.notFound('Resume not found');
@@ -713,9 +774,12 @@ export const unlinkContact = asyncHandler(async (req, res) => {
 export const deleteJob = asyncHandler(async (req, res) => {
   const job = await Job.findOneAndDelete({ _id: req.params.id, user: req.user._id });
   if (!job) throw ApiError.notFound('Job not found');
-  const storedNames = (job.interviews || []).flatMap((interview) =>
-    (interview.attachments || []).map((attachment) => attachment.storedName),
-  );
+  const storedNames = [
+    ...(job.attachments || []).map((attachment) => attachment.storedName),
+    ...(job.interviews || []).flatMap((interview) =>
+      (interview.attachments || []).map((attachment) => attachment.storedName),
+    ),
+  ];
   await Contact.updateMany({ user: req.user._id }, { $pull: { relatedJobs: job._id } });
   await Promise.all(storedNames.map((storedName) => removeStoredFile(storedName)));
   res.status(204).end();

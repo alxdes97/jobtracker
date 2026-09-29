@@ -82,6 +82,9 @@ router.delete(
   '/jobs/:id/interviews/:interviewId/attachments/:attachmentId',
   jobs.deleteInterviewAttachment,
 );
+router.post('/jobs/:id/attachments', jobs.interviewAttachmentUpload, jobs.addJobAttachment);
+router.get('/jobs/:id/attachments/:attachmentId/file', jobs.downloadJobAttachment);
+router.delete('/jobs/:id/attachments/:attachmentId', jobs.deleteJobAttachment);
 router.post('/jobs/:id/resumes/link', jobs.linkLibraryResume);
 router.post('/jobs/:id/resumes', jobs.addResume);
 router.delete('/jobs/:id/resumes/:resumeId', jobs.deleteResume);

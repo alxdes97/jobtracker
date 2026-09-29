@@ -12,6 +12,7 @@ import { ChecklistPanel } from '@/components/jobs/ChecklistPanel';
 import { TodoPanel } from '@/components/jobs/TodoPanel';
 import { LinkResume } from '@/components/jobs/LinkResume';
 import { ResumesPanel } from '@/components/jobs/ResumesPanel';
+import { JobAttachmentsPanel } from '@/components/jobs/JobAttachmentsPanel';
 import { JobContactsPanel } from '@/components/jobs/JobContactsPanel';
 import { JobCompaniesPanel } from '@/components/jobs/JobCompaniesPanel';
 import { EmailTemplatesPanel } from '@/components/jobs/EmailTemplatesPanel';
@@ -19,6 +20,7 @@ import { InterviewTracking } from '@/components/jobs/InterviewTracking';
 import {
   BuildingIcon,
   CheckSquareIcon,
+  DocumentIcon,
   InfoIcon,
   ListIcon,
   MailIcon,
@@ -35,6 +37,7 @@ const TABS = [
   { key: 'info', label: 'Job Info', icon: InfoIcon },
   { key: 'notes', label: 'Notes', icon: NoteIcon },
   { key: 'resumes', label: 'Resumes', icon: PaperclipIcon },
+  { key: 'attachments', label: 'Attachments', icon: DocumentIcon },
   { key: 'contacts', label: 'Contacts', icon: UsersIcon },
   { key: 'companies', label: 'Companies', icon: BuildingIcon },
   { key: 'templates', label: 'Email Templates', icon: MailIcon },
@@ -402,6 +405,10 @@ export default function JobDetailPage() {
                   <dt>Resumes attached</dt>
                   <dd className="font-medium text-slate-800">{job.resumes.length}</dd>
                 </div>
+                <div className="flex justify-between">
+                  <dt>Files attached</dt>
+                  <dd className="font-medium text-slate-800">{job.attachments?.length ?? 0}</dd>
+                </div>
               </dl>
             </div>
           ) : null}
@@ -423,6 +430,17 @@ export default function JobDetailPage() {
               onAdd={async (data) => setJob((await api.addResume(id, data)).job)}
               onLink={async (resumeId) => setJob((await api.linkLibraryResume(id, resumeId)).job)}
               onDelete={async (resumeId) => setJob((await api.deleteJobResume(id, resumeId)).job)}
+            />
+          ) : null}
+
+          {tab === 'attachments' ? (
+            <JobAttachmentsPanel
+              jobId={id}
+              attachments={job.attachments ?? []}
+              onAdd={async (file) => setJob((await api.uploadJobAttachment(id, file)).job)}
+              onDelete={async (attachmentId) =>
+                setJob((await api.deleteJobAttachment(id, attachmentId)).job)
+              }
             />
           ) : null}
 

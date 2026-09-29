@@ -251,6 +251,30 @@ check('tracks interviews, interviewers and a practice session', async () => {
   assert.equal(removed.payload.job.interviews.length, 0);
 });
 
+check('attaches a file to the job and downloads it', async () => {
+  const form = new FormData();
+  form.append('file', new Blob([Buffer.from('cover letter')], { type: 'text/plain' }), 'cover-letter.txt');
+  const attached = await fetch(`${baseUrl}/api/jobs/${jobId}/attachments`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const attachedPayload = await attached.json();
+  assert.equal(attached.status, 201);
+  const attachment = attachedPayload.job.attachments[0];
+  assert.equal(attachment.originalName, 'cover-letter.txt');
+  assert.equal(attachment.storedName, undefined);
+
+  const downloaded = await fetch(`${baseUrl}/api/jobs/${jobId}/attachments/${attachment._id}/file`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(downloaded.status, 200);
+  assert.match(await downloaded.text(), /cover letter/);
+
+  const removed = await call('DELETE', `/api/jobs/${jobId}/attachments/${attachment._id}`);
+  assert.equal(removed.payload.job.attachments.length, 0);
+});
+
 check('attaches a resume', async () => {
   const { status, payload } = await call('POST', `/api/jobs/${jobId}/resumes`, {
     name: 'AI Engineer v2',
