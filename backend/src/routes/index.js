@@ -4,6 +4,7 @@ import * as auth from '../controllers/authController.js';
 import * as jobs from '../controllers/jobController.js';
 import * as contacts from '../controllers/contactController.js';
 import * as companies from '../controllers/companyController.js';
+import * as companyTracks from '../controllers/companyTrackController.js';
 import * as templates from '../controllers/templateController.js';
 import * as resumes from '../controllers/resumeController.js';
 import {
@@ -106,6 +107,12 @@ router.get('/companies/export', companies.exportCompanies);
 router.get('/companies/:id', companies.getCompany);
 router.patch('/companies/:id', companies.updateCompany);
 router.delete('/companies/:id', companies.deleteCompany);
+
+router.get('/company-tracks', companyTracks.listCompanyTracks);
+router.post('/company-tracks', companyTracks.createCompanyTrack);
+router.patch('/company-tracks/:id', companyTracks.updateCompanyTrack);
+router.post('/company-tracks/:id/view', companyTracks.viewCompanyTrackCommits);
+router.delete('/company-tracks/:id', companyTracks.deleteCompanyTrack);
 
 router.get('/resumes', resumes.listResumes);
 router.post('/resumes', resumes.resumeUpload, resumes.createResume);

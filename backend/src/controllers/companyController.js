@@ -1,4 +1,5 @@
 import { Company } from '../models/Company.js';
+import { CompanyTrack } from '../models/CompanyTrack.js';
 import { Job } from '../models/Job.js';
 import { Contact } from '../models/Contact.js';
 import { ApiError, asyncHandler } from '../utils/apiError.js';
@@ -101,6 +102,7 @@ export const deleteCompany = asyncHandler(async (req, res) => {
   await Promise.all([
     Job.updateMany({ user: req.user._id, company: company._id }, { company: null }),
     Contact.updateMany({ user: req.user._id, company: company._id }, { company: null }),
+    CompanyTrack.updateMany({ user: req.user._id, company: company._id }, { company: null }),
   ]);
   res.status(204).end();
 });

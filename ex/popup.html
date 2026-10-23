@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Company Track</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <strong>Company Track</strong>
+      <span id="connection" class="connection" title="Not connected"></span>
+    </header>
+    <p id="page-url" class="url">No page URL yet.</p>
+
+    <section id="setup">
+      <p class="hint">Sign in with the Job Tracker account.</p>
+      <label>
+        URL
+        <input id="api-url" type="url" value="http://213.59.112.27:5000" autocomplete="url" />
+      </label>
+      <label>
+        Email
+        <input id="email" type="email" value="demo@jobtracker.dev" autocomplete="username" />
+      </label>
+      <label>
+        Password
+        <input id="password" type="text" value="demo1234" autocomplete="current-password" />
+      </label>
+      <button id="save" type="button">Sign in</button>
+      <p id="setup-status" class="status"></p>
+    </section>
+
+    <section id="track" hidden>
+      <p id="page-title" class="title"></p>
+      <p id="page-host" class="hint"></p>
+      <label>
+        Company name
+        <input id="company-name" type="text" />
+      </label>
+      <button id="track-btn" type="button">Track this company</button>
+      <p id="status" class="status"></p>
+      <button id="change-token" class="text" type="button">Sign in with a different account</button>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

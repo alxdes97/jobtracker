@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { api } from '@/lib/api';
+import { statusLabel } from '@/lib/format';
 import { JOB_STATUSES, type Job, type JobStatus } from '@/lib/types';
 
 interface AddJobModalProps {
@@ -157,7 +158,7 @@ export function AddJobModal({ open, onClose, onCreated, defaultStatus = 'Bookmar
             >
               {JOB_STATUSES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {statusLabel(option)}
                 </option>
               ))}
             </select>

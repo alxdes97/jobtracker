@@ -200,6 +200,31 @@ export interface Company {
   contactCount: number;
 }
 
+export interface CompanyTrackCommit {
+  _id: string;
+  roles: string[];
+  trackedAt: string;
+  lastViewedAt: string | null;
+}
+
+export interface CompanyTrack {
+  _id: string;
+  name: string;
+  website: string;
+  domain: string;
+  url: string;
+  pageTitle: string;
+  note: string;
+  trackedAt: string;
+  lastTrackedAt: string;
+  roles: string[];
+  addedRoles: string[];
+  removedRoles: string[];
+  hasChanges: boolean;
+  commits: CompanyTrackCommit[];
+  company: { _id: string; name: string; website: string } | string | null;
+}
+
 export interface ResumeFile {
   _id: string;
   name: string;

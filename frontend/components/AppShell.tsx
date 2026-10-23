@@ -10,6 +10,7 @@ import {
   DashboardIcon,
   DocumentIcon,
   LogoutIcon,
+  TrackIcon,
   UsersIcon,
 } from './Icons';
 import { classNames } from '@/lib/format';
@@ -33,6 +34,12 @@ const SIDEBAR = [
     label: 'Resumes',
     icon: DocumentIcon,
     active: (pathname: string) => pathname.startsWith('/resumes'),
+  },
+  {
+    href: '/company-track',
+    label: 'Company Track',
+    icon: TrackIcon,
+    active: (pathname: string) => pathname.startsWith('/company-track'),
   },
 ];
 
@@ -120,7 +127,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               })}
             </nav>
           ) : (
-            <span className="py-3 text-sm font-medium text-brand-800">Resumes</span>
+            <span className="py-3 text-sm font-medium text-brand-800">
+              {SIDEBAR.find((item) => item.active(pathname))?.label ?? 'Job Tracker'}
+            </span>
           )}
           <span className="hidden text-sm text-slate-500 sm:block">{user.name}</span>
         </header>

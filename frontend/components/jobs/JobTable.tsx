@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { StarRating } from '@/components/StarRating';
 import { TrashIcon } from '@/components/Icons';
 import type { Job } from '@/lib/types';
-import { classNames, formatDate, formatSalary } from '@/lib/format';
+import { classNames, formatDate, formatSalary, statusLabel } from '@/lib/format';
 
 interface JobTableProps {
   jobs: Job[];
@@ -166,7 +166,7 @@ export function JobTable({ jobs, onDelete, onRate }: JobTableProps) {
                 <td className="px-4 py-2 text-slate-600">{job.location || '—'}</td>
                 <td className="px-4 py-2">
                   <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {job.status}
+                    {statusLabel(job.status)}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-slate-600">{formatDate(job.dateSaved)}</td>

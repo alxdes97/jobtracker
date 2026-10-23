@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Job Tracker Company Track",
+  "version": "1.0.0",
+  "description": "Save the company website you are viewing into Job Tracker.",
+  "action": {
+    "default_title": "Track this company",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["activeTab", "tabs", "scripting", "storage"],
+  "host_permissions": ["http://*/*", "https://*/*"]
+}

@@ -304,6 +304,55 @@ check('creates a contact and links it to the job both ways', async () => {
   assert.equal(contact.payload.contact.relatedJobs.length, 1);
 });
 
+check('tracks a company website from a page address', async () => {
+  const created = await call('POST', '/api/company-tracks', {
+    name: 'Harbor Careers',
+    url: 'https://www.harbor.example/careers',
+    pageTitle: 'Careers at Harbor',
+    roles: ['AI Engineer', 'Product Designer'],
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.payload.track.website, 'https://harbor.example');
+  assert.equal(created.payload.track.domain, 'harbor.example');
+  assert.equal(created.payload.track.pageTitle, 'Careers at Harbor');
+  assert.equal(created.payload.track.hasChanges, false);
+  assert.equal(created.payload.track.roles.length, 2);
+  assert.ok(created.payload.track.company);
+
+  const noted = await call('PATCH', `/api/company-tracks/${created.payload.track._id}`, {
+    note: 'Follow up after the new research role is posted.',
+  });
+  assert.equal(noted.status, 200);
+  assert.equal(noted.payload.track.note, 'Follow up after the new research role is posted.');
+
+  const again = await call('POST', '/api/company-tracks', {
+    name: 'Harbor Careers',
+    url: 'https://www.harbor.example/careers/',
+    pageTitle: 'Careers at Harbor',
+    roles: ['AI Engineer', 'Research Scientist'],
+  });
+  assert.equal(again.status, 200);
+  assert.equal(again.payload.track._id, created.payload.track._id);
+  assert.deepEqual(again.payload.track.addedRoles, ['Research Scientist']);
+  assert.deepEqual(again.payload.track.removedRoles, ['Product Designer']);
+  assert.equal(again.payload.track.hasChanges, true);
+  assert.equal(again.payload.track.trackedAt, created.payload.track.trackedAt);
+  assert.equal(again.payload.track.note, 'Follow up after the new research role is posted.');
+  assert.equal(again.payload.track.commits.length, 1);
+  assert.deepEqual(again.payload.track.commits[0].roles, ['Research Scientist']);
+  assert.equal(again.payload.track.commits[0].lastViewedAt, null);
+
+  const viewed = await call('POST', `/api/company-tracks/${created.payload.track._id}/view`);
+  assert.equal(viewed.status, 200);
+  assert.ok(viewed.payload.track.commits[0].lastViewedAt);
+
+  const listed = await call('GET', '/api/company-tracks');
+  assert.equal(listed.payload.tracks[0].name, 'Harbor Careers');
+
+  const removed = await call('DELETE', `/api/company-tracks/${created.payload.track._id}`);
+  assert.equal(removed.status, 204);
+});
+
 check('connects a company from the directory and can disconnect it', async () => {
   const created = await call('POST', '/api/companies', {
     name: 'Northwind Labs',

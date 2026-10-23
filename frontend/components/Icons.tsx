@@ -23,6 +23,16 @@ export function UsersIcon({ className = base }: IconProps) {
   );
 }
 
+export function TrackIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+      <circle cx="12" cy="12" r="7" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21" />
+    </svg>
+  );
+}
+
 export function BuildingIcon({ className = base }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>

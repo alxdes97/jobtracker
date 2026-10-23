@@ -8,7 +8,7 @@ import { InterviewPortal } from '@/components/jobs/InterviewPortal';
 import { api } from '@/lib/api';
 import { jobProfileNames } from '@/lib/resumeProfile';
 import { PIPELINE_STATUSES, type Job, type JobStatus, type ResumeFile } from '@/lib/types';
-import { classNames, formatDate } from '@/lib/format';
+import { classNames, formatDate, statusLabel } from '@/lib/format';
 import { useDismiss } from '@/lib/useDismiss';
 
 type ColumnSort = 'manual' | 'title' | 'company' | 'date';
@@ -106,7 +106,7 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
               className="rounded border border-slate-300 px-2 py-0.5 hover:bg-slate-100"
               onClick={() => setHidden((current) => current.filter((item) => item !== status))}
             >
-              {status} ✕
+              {statusLabel(status)} ✕
             </button>
           ))}
         </div>
@@ -144,10 +144,10 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                       className="text-sm font-semibold text-slate-800 hover:text-brand-800 hover:underline"
                       onClick={() => setTrackerOpen(true)}
                     >
-                      {status}
+                      {statusLabel(status)}
                     </button>
                   ) : (
-                    <h3 className="text-sm font-semibold text-slate-800">{status}</h3>
+                    <h3 className="text-sm font-semibold text-slate-800">{statusLabel(status)}</h3>
                   )}
                   <span className="text-xs text-slate-400">{columnJobs.length}</span>
                 </div>
@@ -156,7 +156,7 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                     type="button"
                     className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                     onClick={() => setOpenMenu(openMenu === status ? null : status)}
-                    aria-label={`${status} column options`}
+                    aria-label={`${statusLabel(status)} column options`}
                   >
                     <DotsIcon className="h-4 w-4" />
                   </button>
@@ -164,7 +164,7 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                     type="button"
                     className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                     onClick={() => onAdd(status)}
-                    aria-label={`Add job to ${status}`}
+                    aria-label={`Add job to ${statusLabel(status)}`}
                   >
                     <PlusIcon className="h-4 w-4" />
                   </button>

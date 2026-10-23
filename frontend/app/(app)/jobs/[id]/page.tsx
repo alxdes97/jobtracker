@@ -30,7 +30,7 @@ import {
   UsersIcon,
 } from '@/components/Icons';
 import { api } from '@/lib/api';
-import { classNames, hostnameOf, timeAgo, toDateInput } from '@/lib/format';
+import { classNames, hostnameOf, statusLabel, timeAgo, toDateInput } from '@/lib/format';
 import type { Job, JobStatus } from '@/lib/types';
 
 const TABS = [
@@ -197,7 +197,7 @@ export default function JobDetailPage() {
           <p className="text-slate-700">
             <span className="font-medium text-brand-800">Guidance</span>
             {' › '}
-            {job.status} Steps: {job.guidance.percent}% Complete
+            {statusLabel(job.status)} Steps: {job.guidance.percent}% Complete
           </p>
           <button
             type="button"

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DocumentIcon, DownloadIcon, PlusIcon, SearchIcon, TrashIcon } from '@/components/Icons';
 import { api, downloadResume } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatDate, statusLabel } from '@/lib/format';
 import { jobsForProfile, profileNameOf } from '@/lib/resumeProfile';
 import type { Job, ResumeFile } from '@/lib/types';
 
@@ -191,7 +191,7 @@ export default function ResumesPage() {
                     <p className="text-sm font-medium text-slate-800">{job.title}</p>
                     <p className="text-xs text-slate-500">
                       {job.companyName}
-                      {job.location ? ` · ${job.location}` : ''} · {job.status}
+                      {job.location ? ` · ${job.location}` : ''} · {statusLabel(job.status)}
                     </p>
                   </Link>
                 </li>

@@ -1,7 +1,7 @@
 'use client';
 
 import { PIPELINE_STATUSES, type JobStatus } from '@/lib/types';
-import { classNames } from '@/lib/format';
+import { classNames, statusLabel } from '@/lib/format';
 
 interface StatusStepperProps {
   status: JobStatus;
@@ -28,7 +28,7 @@ export function StatusStepper({ status, onChange }: StatusStepperProps) {
               index > 0 && 'border-l border-slate-200',
             )}
           >
-            {step === 'Offer Accepted' ? 'Accepted' : step}
+            {step === 'Offer Accepted' ? 'Accepted' : statusLabel(step)}
           </button>
         );
       })}

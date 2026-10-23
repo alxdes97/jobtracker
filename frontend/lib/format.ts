@@ -59,3 +59,13 @@ export function hostnameOf(url?: string) {
 export function classNames(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  Bookmarked: 'Applied',
+  Applying: 'Intro',
+  Applied: 'Submitted',
+};
+
+export function statusLabel(status: string) {
+  return STATUS_LABELS[status] ?? status;
+}

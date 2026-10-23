@@ -1,7 +1,7 @@
 'use client';
 
 import { PIPELINE_STATUSES, type JobStatus } from '@/lib/types';
-import { classNames } from '@/lib/format';
+import { classNames, statusLabel } from '@/lib/format';
 
 interface PipelineHeaderProps {
   counts: Record<string, number>;
@@ -39,7 +39,7 @@ export function PipelineHeader({ counts, activeStatus, onSelect }: PipelineHeade
               {count > 0 ? count : '— —'}
             </span>
             <span className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              {status}
+              {statusLabel(status)}
             </span>
             {active ? (
               <span className="absolute inset-x-0 bottom-0 h-0.5 bg-amber-400" aria-hidden />

@@ -1,5 +1,6 @@
 import type {
   Company,
+  CompanyTrack,
   Contact,
   EmailTemplate,
   Job,
@@ -234,6 +235,15 @@ export const api = {
   updateCompany: (id: string, data: Partial<Company>) =>
     request<{ company: Company }>(`/companies/${id}`, { method: 'PATCH', body: body(data) }),
   deleteCompany: (id: string) => request<void>(`/companies/${id}`, { method: 'DELETE' }),
+
+  listCompanyTracks: () => request<{ tracks: CompanyTrack[] }>('/company-tracks'),
+  createCompanyTrack: (data: { name?: string; website?: string; url?: string; pageTitle?: string }) =>
+    request<{ track: CompanyTrack }>('/company-tracks', { method: 'POST', body: body(data) }),
+  updateCompanyTrack: (id: string, data: { note: string }) =>
+    request<{ track: CompanyTrack }>(`/company-tracks/${id}`, { method: 'PATCH', body: body(data) }),
+  viewCompanyTrackCommits: (id: string) =>
+    request<{ track: CompanyTrack }>(`/company-tracks/${id}/view`, { method: 'POST' }),
+  deleteCompanyTrack: (id: string) => request<void>(`/company-tracks/${id}`, { method: 'DELETE' }),
 
   listResumes: () => request<{ resumes: ResumeFile[] }>('/resumes'),
   updateResume: (id: string, profileName: string) =>
