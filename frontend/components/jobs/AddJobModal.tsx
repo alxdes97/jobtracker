@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { api } from '@/lib/api';
 import { statusLabel } from '@/lib/format';
-import { JOB_STATUSES, type Job, type JobStatus } from '@/lib/types';
+import { profileNameOf } from '@/lib/resumeProfile';
+import { JOB_STATUSES, type Job, type JobStatus, type ResumeFile } from '@/lib/types';
 
 interface AddJobModalProps {
   open: boolean;
@@ -27,8 +28,15 @@ const emptyForm = {
 export function AddJobModal({ open, onClose, onCreated, defaultStatus = 'Bookmarked' }: AddJobModalProps) {
   const [form, setForm] = useState(emptyForm);
   const [status, setStatus] = useState<JobStatus>(defaultStatus);
+  const [resumes, setResumes] = useState<ResumeFile[]>([]);
+  const [profile, setProfile] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const profiles = useMemo(
+    () => [...new Set(resumes.map(profileNameOf).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [resumes],
+  );
 
   // The modal stays mounted between openings, so the column the user clicked
   // "+" on only reaches the form if we resync each time it opens.
@@ -37,6 +45,18 @@ export function AddJobModal({ open, onClose, onCreated, defaultStatus = 'Bookmar
     setForm(emptyForm);
     setStatus(defaultStatus);
     setError('');
+    const saved = window.localStorage.getItem('job-tracker-profile') || '';
+    api
+      .listResumes()
+      .then((response) => {
+        setResumes(response.resumes);
+        const names = new Set(response.resumes.map(profileNameOf));
+        setProfile(names.has(saved) ? saved : '');
+      })
+      .catch(() => {
+        setResumes([]);
+        setProfile('');
+      });
   }, [open, defaultStatus]);
 
   function update(field: keyof typeof emptyForm, value: string) {
@@ -59,7 +79,12 @@ export function AddJobModal({ open, onClose, onCreated, defaultStatus = 'Bookmar
         salaryMax: form.salaryMax ? Number(form.salaryMax) : null,
         deadline: form.deadline || null,
       } as Partial<Job>);
-      onCreated(response.job);
+      let job = response.job;
+      const resume = profile ? resumes.find((item) => profileNameOf(item) === profile) : undefined;
+      if (resume) {
+        job = (await api.linkLibraryResume(job._id, resume._id)).job;
+      }
+      onCreated(job);
       close();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Could not save job');
@@ -143,6 +168,25 @@ export function AddJobModal({ open, onClose, onCreated, defaultStatus = 'Bookmar
               onChange={(event) => update('location', event.target.value)}
             />
           </div>
+        </div>
+
+        <div>
+          <label className="label" htmlFor="job-profile">
+            Profile used
+          </label>
+          <select
+            id="job-profile"
+            className="input"
+            value={profile}
+            onChange={(event) => setProfile(event.target.value)}
+          >
+            <option value="">Select a profile</option>
+            {profiles.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
