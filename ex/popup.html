@@ -2,15 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Company Track</title>
+    <title>Job Tracker</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <header>
-      <strong>Company Track</strong>
+      <strong>Job Tracker</strong>
       <span id="connection" class="connection" title="Not connected"></span>
     </header>
-    <p id="page-url" class="url">No page URL yet.</p>
 
     <section id="setup">
       <p class="hint">Sign in with the Job Tracker account.</p>
@@ -30,18 +29,87 @@
       <p id="setup-status" class="status"></p>
     </section>
 
-    <section id="track" hidden>
-      <p id="page-title" class="title"></p>
-      <p id="page-host" class="hint"></p>
-      <label>
-        Company name
-        <input id="company-name" type="text" />
-      </label>
-      <button id="track-btn" type="button">Track this company</button>
-      <p id="status" class="status"></p>
+    <section id="main" hidden>
+      <nav class="tabs">
+        <button id="tab-job" class="tab active" type="button">Add job</button>
+        <button id="tab-track" class="tab" type="button">Track company</button>
+      </nav>
+      <p id="track-state" class="badge" hidden></p>
+
+      <form id="job-panel" autocomplete="off">
+        <label>
+          URL for Original Posting
+          <input id="job-url" type="url" placeholder="https://" />
+        </label>
+        <p id="fill-status" class="hint"></p>
+        <label>
+          Job Title
+          <input id="job-title" type="text" required />
+        </label>
+        <div class="row">
+          <label>
+            Company Name
+            <input id="job-company" type="text" required />
+          </label>
+          <label>
+            Location
+            <input id="job-location" type="text" />
+          </label>
+        </div>
+        <label>
+          Profile used
+          <select id="job-profile">
+            <option value="">Select a profile</option>
+          </select>
+        </label>
+        <div class="row three">
+          <label>
+            Status
+            <select id="job-status"></select>
+          </label>
+          <label>
+            Min Salary
+            <input id="job-salary-min" type="number" min="0" />
+          </label>
+          <label>
+            Max Salary
+            <input id="job-salary-max" type="number" min="0" />
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            Currency
+            <input id="job-currency" type="text" maxlength="3" value="USD" data-auto="USD" />
+          </label>
+          <label>
+            Deadline
+            <input id="job-deadline" type="date" />
+          </label>
+        </div>
+        <label>
+          Job Description
+          <textarea id="job-description" rows="5"></textarea>
+        </label>
+        <button id="job-save" type="submit">Save Job</button>
+        <p id="job-status-text" class="status"></p>
+      </form>
+
+      <section id="track-panel" hidden>
+        <p id="page-url" class="url">No page URL yet.</p>
+        <p id="page-title" class="title"></p>
+        <p id="page-host" class="hint"></p>
+        <label>
+          Company name
+          <input id="company-name" type="text" />
+        </label>
+        <button id="track-btn" type="button">Track this company</button>
+        <p id="status" class="status"></p>
+      </section>
+
       <button id="change-token" class="text" type="button">Sign in with a different account</button>
     </section>
 
+    <script src="extract.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

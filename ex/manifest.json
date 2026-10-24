@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Job Tracker Company Track",
-  "version": "1.0.0",
-  "description": "Save the company website you are viewing into Job Tracker.",
+  "name": "Job Tracker",
+  "version": "1.1.0",
+  "description": "Save the job posting or company website you are viewing into Job Tracker.",
   "action": {
-    "default_title": "Track this company",
+    "default_title": "Save to Job Tracker",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

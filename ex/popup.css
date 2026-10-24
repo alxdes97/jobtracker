@@ -3,7 +3,7 @@
 }
 
 body {
-  width: 320px;
+  width: 380px;
   margin: 0;
   padding: 14px;
   background: #fff;
@@ -50,6 +50,7 @@ label {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   margin-top: 4px;
@@ -99,6 +100,83 @@ button.text {
   color: #166051;
 }
 
-.status.error {
+.status.error,
+.hint.error {
   color: #b42318;
+}
+
+select {
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #eefaf5;
+}
+
+.tabs .tab {
+  flex: 1;
+  margin: 0;
+  padding: 6px 8px;
+  background: transparent;
+  color: #166051;
+}
+
+.tabs .tab.active {
+  background: #166051;
+  color: #fff;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.row.three {
+  grid-template-columns: 1.2fr 1fr 1fr;
+}
+
+#fill-status {
+  min-height: 1.2em;
+  font-size: 12px;
+}
+
+.badge {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #f4f7f6;
+  color: #4b635c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge.tracking {
+  background: #e7f6ec;
+  color: #0f6b32;
+}
+
+.badge.missing {
+  background: #f8f4ea;
+  color: #8a5a12;
+}
+
+.badge .meta {
+  display: block;
+  margin-top: 2px;
+  color: #5d726b;
+  font-weight: 400;
 }
