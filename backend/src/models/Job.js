@@ -26,6 +26,15 @@ const checklistItemSchema = new mongoose.Schema(
   { _id: true },
 );
 
+const hiringStepSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    date: { type: Date, default: null },
+    done: { type: Boolean, default: false },
+  },
+  { _id: true },
+);
+
 const resumeSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -135,6 +144,7 @@ const jobSchema = new mongoose.Schema(
     notes: { type: String, default: '' },
     noteItems: { type: [noteItemSchema], default: [] },
     checklist: { type: [checklistItemSchema], default: [] },
+    hiringProcess: { type: [hiringStepSchema], default: [] },
     todos: { type: [todoItemSchema], default: [] },
     interviews: { type: [interviewSchema], default: [] },
     resumes: { type: [resumeSchema], default: [] },

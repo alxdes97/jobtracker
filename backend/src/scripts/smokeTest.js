@@ -167,6 +167,41 @@ check('adds a to-do and marks it done', async () => {
   assert.equal(removed.payload.job.todos.length, 0);
 });
 
+check('keeps a hiring process of dated steps', async () => {
+  const { payload: createdJob } = await call('GET', `/api/jobs/${jobId}`);
+  assert.deepEqual(
+    createdJob.job.hiringProcess.map((step) => step.name),
+    ['Recruiter screen', 'Hiring manager', 'Technical interview', 'Final interview', 'Offer'],
+  );
+
+  const added = await call('POST', `/api/jobs/${jobId}/hiring-process`, { name: 'Team match' });
+  assert.equal(added.status, 201);
+  const step = added.payload.job.hiringProcess.at(-1);
+  assert.equal(step.name, 'Team match');
+  assert.equal(step.done, false);
+
+  const updated = await call('PATCH', `/api/jobs/${jobId}/hiring-process/${step._id}`, {
+    done: true,
+    date: '2026-11-20',
+  });
+  const saved = updated.payload.job.hiringProcess.find((item) => item._id === step._id);
+  const savedDate = new Date(saved.date);
+  assert.equal(saved.done, true);
+  assert.equal(savedDate.getFullYear(), 2026);
+  assert.equal(savedDate.getMonth(), 10);
+  assert.equal(savedDate.getDate(), 20);
+
+  const current = updated.payload.job.hiringProcess.map((item) => item._id);
+  const reordered = await call('PATCH', `/api/jobs/${jobId}/hiring-process`, {
+    order: [step._id, ...current.filter((id) => id !== step._id)],
+  });
+  assert.equal(reordered.payload.job.hiringProcess[0].name, 'Team match');
+
+  const removed = await call('DELETE', `/api/jobs/${jobId}/hiring-process/${step._id}`);
+  assert.equal(removed.payload.job.hiringProcess.length, 5);
+  assert.equal(removed.payload.job.hiringProcess[0].name, 'Recruiter screen');
+});
+
 check('adds, edits and removes a job note', async () => {
   const created = await call('POST', `/api/jobs/${jobId}/notes`, {
     body: 'Ask about the on-call rotation.',

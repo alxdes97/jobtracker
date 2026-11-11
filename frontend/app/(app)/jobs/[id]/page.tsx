@@ -9,6 +9,7 @@ import { StatusStepper } from '@/components/jobs/StatusStepper';
 import { KeywordPanel } from '@/components/jobs/KeywordPanel';
 import { NotesPanel } from '@/components/jobs/NotesPanel';
 import { ChecklistPanel } from '@/components/jobs/ChecklistPanel';
+import { HiringProcessPanel } from '@/components/jobs/HiringProcessPanel';
 import { TodoPanel } from '@/components/jobs/TodoPanel';
 import { LinkResume } from '@/components/jobs/LinkResume';
 import { ResumesPanel } from '@/components/jobs/ResumesPanel';
@@ -18,6 +19,7 @@ import { JobCompaniesPanel } from '@/components/jobs/JobCompaniesPanel';
 import { EmailTemplatesPanel } from '@/components/jobs/EmailTemplatesPanel';
 import { InterviewTracking } from '@/components/jobs/InterviewTracking';
 import {
+  BriefcaseIcon,
   BuildingIcon,
   CheckSquareIcon,
   DocumentIcon,
@@ -42,6 +44,7 @@ const TABS = [
   { key: 'companies', label: 'Companies', icon: BuildingIcon },
   { key: 'templates', label: 'Email Templates', icon: MailIcon },
   { key: 'checklist', label: 'Check List', icon: CheckSquareIcon },
+  { key: 'process', label: 'Hiring Process', icon: BriefcaseIcon },
   { key: 'todo', label: 'To Do', icon: ListIcon },
 ] as const;
 
@@ -474,6 +477,20 @@ export default function JobDetailPage() {
               }
               onAdd={async (label) => setJob((await api.addChecklistItem(id, label)).job)}
               onDelete={async (itemId) => setJob((await api.deleteChecklistItem(id, itemId)).job)}
+            />
+          ) : null}
+
+          {tab === 'process' ? (
+            <HiringProcessPanel
+              steps={job.hiringProcess ?? []}
+              onToggle={async (stepId, done) =>
+                setJob((await api.updateHiringStep(id, stepId, { done })).job)
+              }
+              onUpdate={async (stepId, data) => setJob((await api.updateHiringStep(id, stepId, data)).job)}
+              onAdd={async (name) => setJob((await api.addHiringStep(id, name)).job)}
+              onUseStandard={async () => setJob((await api.useStandardHiringProcess(id)).job)}
+              onDelete={async (stepId) => setJob((await api.deleteHiringStep(id, stepId)).job)}
+              onReorder={async (order) => setJob((await api.reorderHiringProcess(id, order)).job)}
             />
           ) : null}
 

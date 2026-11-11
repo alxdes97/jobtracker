@@ -38,6 +38,13 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+export interface HiringStep {
+  _id: string;
+  name: string;
+  date: string | null;
+  done: boolean;
+}
+
 export const INTERVIEW_TYPES = [
   'Phone Screen',
   'Recruiter',
@@ -150,6 +157,7 @@ export interface Job {
   notes: string;
   noteItems: NoteItem[];
   checklist: ChecklistItem[];
+  hiringProcess: HiringStep[];
   todos: TodoItem[];
   interviews: Interview[];
   resumes: JobResume[];

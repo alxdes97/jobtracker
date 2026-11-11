@@ -101,6 +101,18 @@ function guidanceFor(status) {
   return (GUIDANCE_CHECKLIST[status] || []).map((label) => ({ label, stage: status, done: false }));
 }
 
+const STANDARD_HIRING_STEPS = [
+  'Recruiter screen',
+  'Hiring manager',
+  'Technical interview',
+  'Final interview',
+  'Offer',
+];
+
+function standardHiringProcess() {
+  return STANDARD_HIRING_STEPS.map((name) => ({ name, date: null, done: false }));
+}
+
 function withDerived(jobDoc) {
   const job = jobDoc.toJSON ? jobDoc.toJSON() : jobDoc;
   const stageItems = job.checklist.filter((item) => item.stage === job.status);
@@ -187,6 +199,7 @@ export const createJob = asyncHandler(async (req, res) => {
     company: await linkCompany(req.user._id, companyName),
     order: (last?.order ?? -1) + 1,
     checklist: guidanceFor(jobStatus),
+    hiringProcess: standardHiringProcess(),
     dateSaved: createdOn,
     dateApplied: editable.dateApplied || createdOn,
   });
@@ -327,6 +340,81 @@ export const deleteTodo = asyncHandler(async (req, res) => {
   if (!item) throw ApiError.notFound('To-do item not found');
 
   item.deleteOne();
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const addHiringStep = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+  if (job.hiringProcess.length >= 30) throw ApiError.badRequest('A hiring process can have at most 30 steps');
+
+  if (req.body.standard) {
+    if (job.hiringProcess.length) throw ApiError.badRequest('Hiring process already has steps');
+    job.hiringProcess.push(...standardHiringProcess());
+  } else {
+    const name = String(req.body.name || '').trim();
+    if (!name) throw ApiError.badRequest('Hiring step needs a name');
+    job.hiringProcess.push({ name: name.slice(0, 120), date: null, done: false });
+  }
+
+  await job.save();
+  res.status(201).json({ job: withDerived(job) });
+});
+
+export const updateHiringStep = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const step = job.hiringProcess.id(req.params.stepId);
+  if (!step) throw ApiError.notFound('Hiring step not found');
+
+  if ('done' in req.body) step.done = Boolean(req.body.done);
+  if ('name' in req.body) {
+    const name = String(req.body.name || '').trim();
+    if (!name) throw ApiError.badRequest('Hiring step needs a name');
+    step.name = name.slice(0, 120);
+  }
+  if ('date' in req.body) step.date = parseInterviewDate(req.body.date);
+
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const reorderHiringProcess = asyncHandler(async (req, res) => {
+  const order = req.body.order;
+  if (!Array.isArray(order)) throw ApiError.badRequest('Order is required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+  if (order.length !== job.hiringProcess.length) {
+    throw ApiError.badRequest('Order must include every hiring step');
+  }
+
+  const seen = new Set();
+  const next = [];
+  for (const id of order) {
+    const key = String(id);
+    if (seen.has(key)) throw ApiError.badRequest('Order lists a step more than once');
+    seen.add(key);
+    const step = job.hiringProcess.id(id);
+    if (!step) throw ApiError.badRequest('Order includes an unknown step');
+    next.push(step.toObject());
+  }
+
+  job.hiringProcess.splice(0, job.hiringProcess.length, ...next);
+  await job.save();
+  res.json({ job: withDerived(job) });
+});
+
+export const deleteHiringStep = asyncHandler(async (req, res) => {
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const step = job.hiringProcess.id(req.params.stepId);
+  if (!step) throw ApiError.notFound('Hiring step not found');
+
+  step.deleteOne();
   await job.save();
   res.json({ job: withDerived(job) });
 });

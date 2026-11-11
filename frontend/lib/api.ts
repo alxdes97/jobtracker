@@ -104,6 +104,27 @@ export const api = {
   deleteTodo: (id: string, todoId: string) =>
     request<{ job: Job }>(`/jobs/${id}/todos/${todoId}`, { method: 'DELETE' }),
 
+  addHiringStep: (id: string, name: string) =>
+    request<{ job: Job }>(`/jobs/${id}/hiring-process`, { method: 'POST', body: body({ name }) }),
+  useStandardHiringProcess: (id: string) =>
+    request<{ job: Job }>(`/jobs/${id}/hiring-process`, {
+      method: 'POST',
+      body: body({ standard: true }),
+    }),
+  updateHiringStep: (
+    id: string,
+    stepId: string,
+    data: { name?: string; date?: string | null; done?: boolean },
+  ) =>
+    request<{ job: Job }>(`/jobs/${id}/hiring-process/${stepId}`, {
+      method: 'PATCH',
+      body: body(data),
+    }),
+  deleteHiringStep: (id: string, stepId: string) =>
+    request<{ job: Job }>(`/jobs/${id}/hiring-process/${stepId}`, { method: 'DELETE' }),
+  reorderHiringProcess: (id: string, order: string[]) =>
+    request<{ job: Job }>(`/jobs/${id}/hiring-process`, { method: 'PATCH', body: body({ order }) }),
+
   addChecklistItem: (id: string, label: string) =>
     request<{ job: Job }>(`/jobs/${id}/checklist`, { method: 'POST', body: body({ label }) }),
   updateChecklistItem: (id: string, itemId: string, data: { done?: boolean; label?: string }) =>
