@@ -199,6 +199,7 @@ export function MeetingCalendar() {
   const [meetings, setMeetings] = useState<CalendarMeeting[]>([]);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [proposed, setProposed] = useState<{ start: string; end: string } | null>(null);
   const [menu, setMenu] = useState<{ meeting: CalendarMeeting; x: number; y: number } | null>(null);
   const [details, setDetails] = useState<CalendarMeeting | null>(null);
 
@@ -286,6 +287,7 @@ export function MeetingCalendar() {
             aria-label="Add meeting"
             onClick={(event) => {
               event.stopPropagation();
+              setProposed(null);
               setCreating(true);
             }}
           >
@@ -312,6 +314,10 @@ export function MeetingCalendar() {
           days={days}
           meetings={placed}
           onOpenMenu={openMenu}
+          onCreateRange={(start, end) => {
+            setProposed({ start: localDateTimeValue(start), end: localDateTimeValue(end) });
+            setCreating(true);
+          }}
         />
       )}
 
@@ -345,7 +351,11 @@ export function MeetingCalendar() {
 
       <CreateMeetingModal
         open={creating}
-        onClose={() => setCreating(false)}
+        proposed={proposed}
+        onClose={() => {
+          setCreating(false);
+          setProposed(null);
+        }}
         onCreated={async (startsAt, warning) => {
           setCreating(false);
           setCursor(startsAt);
@@ -359,16 +369,50 @@ export function MeetingCalendar() {
   );
 }
 
+const SNAP_MINUTES = 15;
+
+interface TimeDrag {
+  day: Date;
+  anchor: number;
+  originY: number;
+  start: number;
+  end: number;
+}
+
+function minutesFromPointer(column: HTMLElement, clientY: number) {
+  const rect = column.getBoundingClientRect();
+  const y = Math.min(Math.max(clientY - rect.top, 0), rect.height - 1);
+  return Math.floor((y / HOUR_PX) * 60);
+}
+
+function selectionMinutes(anchorMin: number, pointerMin: number, click: boolean) {
+  const limit = 24 * 60;
+  const anchor = Math.min(Math.max(Math.floor(anchorMin / SNAP_MINUTES) * SNAP_MINUTES, 0), limit - SNAP_MINUTES);
+  const pointer = Math.min(Math.max(Math.floor(pointerMin / SNAP_MINUTES) * SNAP_MINUTES, 0), limit - SNAP_MINUTES);
+  if (click) return { start: anchor, end: Math.min(anchor + 60, limit) };
+  const start = Math.min(anchor, pointer);
+  const end = Math.min(Math.max(anchor, pointer) + SNAP_MINUTES, limit);
+  return { start, end: Math.max(end, start + SNAP_MINUTES) };
+}
+
+function atMinutes(day: Date, minutes: number) {
+  const date = startOfDay(day);
+  date.setMinutes(minutes);
+  return date;
+}
+
 function TimeGrid({
   gridRef,
   days,
   meetings,
   onOpenMenu,
+  onCreateRange,
 }: {
   gridRef: React.RefObject<HTMLDivElement>;
   days: Date[];
   meetings: PlacedMeeting[];
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
+  onCreateRange: (start: Date, end: Date) => void;
 }) {
   const [now, setNow] = useState(() => new Date());
   const [extraZones, setExtraZones] = useState<string[]>([]);
@@ -418,6 +462,47 @@ function TimeGrid({
 
   function removeZone(timeZone: string) {
     setExtraZones((current) => current.filter((zone) => zone !== timeZone));
+  }
+
+  const [drag, setDrag] = useState<TimeDrag | null>(null);
+  const dragRef = useRef<TimeDrag | null>(null);
+  dragRef.current = drag;
+
+  function beginDrag(event: React.PointerEvent<HTMLDivElement>, day: Date) {
+    if (event.button !== 0) return;
+    if ((event.target as HTMLElement).closest('button')) return;
+    const column = event.currentTarget;
+    const anchor = minutesFromPointer(column, event.clientY);
+    const range = selectionMinutes(anchor, anchor, true);
+    const next = { day, anchor, originY: event.clientY, start: range.start, end: range.end };
+    dragRef.current = next;
+    setDrag(next);
+    try {
+      column.setPointerCapture(event.pointerId);
+    } catch {
+      // A drag can still follow the pointer when the browser will not capture it.
+    }
+  }
+
+  function moveDrag(event: React.PointerEvent<HTMLDivElement>, day: Date) {
+    const current = dragRef.current;
+    if (!current || !sameDay(current.day, day)) return;
+    const pointer = minutesFromPointer(event.currentTarget, event.clientY);
+    const range = selectionMinutes(current.anchor, pointer, Math.abs(event.clientY - current.originY) < 6);
+    const next = { ...current, start: range.start, end: range.end };
+    dragRef.current = next;
+    setDrag(next);
+  }
+
+  function finishDrag(event: React.PointerEvent<HTMLDivElement>, day: Date) {
+    const current = dragRef.current;
+    if (!current || !sameDay(current.day, day)) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    dragRef.current = null;
+    setDrag(null);
+    onCreateRange(atMinutes(current.day, current.start), atMinutes(current.day, current.end));
   }
 
   return (
@@ -507,7 +592,17 @@ function TimeGrid({
         {days.map((day) => {
           const timed = layoutTimed(meetings.filter((item) => !item.allDay && sameDay(item.start, day)));
           return (
-            <div key={day.toISOString()} className="relative border-l border-slate-200">
+            <div
+              key={day.toISOString()}
+              className="relative select-none border-l border-slate-200"
+              onPointerDown={(event) => beginDrag(event, day)}
+              onPointerMove={(event) => moveDrag(event, day)}
+              onPointerUp={(event) => finishDrag(event, day)}
+              onPointerCancel={() => {
+                dragRef.current = null;
+                setDrag(null);
+              }}
+            >
               {hours.map((hour) => (
                 <div key={hour} className="border-b border-slate-100" style={{ height: HOUR_PX }} />
               ))}
@@ -536,6 +631,19 @@ function TimeGrid({
                   </button>
                 );
               })}
+              {drag && sameDay(drag.day, day) ? (
+                <div
+                  className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-md border border-brand-400 bg-brand-50 px-1.5 py-1 text-[12px] leading-snug text-brand-800"
+                  style={{
+                    top: (drag.start / 60) * HOUR_PX,
+                    height: Math.max(((drag.end - drag.start) / 60) * HOUR_PX - 2, 16),
+                  }}
+                >
+                  <span className="block truncate font-medium">
+                    {formatTime(atMinutes(day, drag.start))} – {formatTime(atMinutes(day, drag.end))}
+                  </span>
+                </div>
+              ) : null}
               {sameDay(day, now) ? (
                 <div
                   className="pointer-events-none absolute inset-x-0 z-10 border-t-2"
@@ -757,10 +865,12 @@ function layoutTimed(items: PlacedMeeting[]) {
 
 function CreateMeetingModal({
   open,
+  proposed,
   onClose,
   onCreated,
 }: {
   open: boolean;
+  proposed: { start: string; end: string } | null;
   onClose: () => void;
   onCreated: (startsAt: Date, warning?: string) => Promise<void>;
 }) {
@@ -779,12 +889,17 @@ function CreateMeetingModal({
 
   useEffect(() => {
     if (!open) return;
-    const start = new Date();
-    start.setMinutes(0, 0, 0);
-    start.setHours(start.getHours() + 1);
-    const end = new Date(start.getTime() + 60 * 60 * 1000);
-    setStartsAt(localDateTimeValue(start));
-    setEndsAt(localDateTimeValue(end));
+    if (proposed) {
+      setStartsAt(proposed.start);
+      setEndsAt(proposed.end);
+    } else {
+      const start = new Date();
+      start.setMinutes(0, 0, 0);
+      start.setHours(start.getHours() + 1);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      setStartsAt(localDateTimeValue(start));
+      setEndsAt(localDateTimeValue(end));
+    }
     setQuery('');
     setJobId('');
     setInterviewer('');
@@ -795,7 +910,7 @@ function CreateMeetingModal({
     api.listJobs().then((response) => {
       setJobs(response.jobs.filter((job) => job.status !== 'Closed'));
     }).catch(() => setJobs([]));
-  }, [open]);
+  }, [open, proposed]);
 
   const selected = jobs.find((job) => job._id === jobId);
   const matches = jobs.filter((job) => {
