@@ -5,7 +5,7 @@ async function seed() {
   await connectDatabase();
   const credentials = await seedDemoData();
 
-  console.log('Seeded demo data.');
+  console.log('Seeded the admin user.');
   console.log(`  email:    ${credentials.email}`);
   console.log(`  password: ${credentials.password}`);
 

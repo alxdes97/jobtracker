@@ -90,7 +90,7 @@ This boots a throwaway in-memory MongoDB, seeds the demo account and starts both
 npm run seed
 ```
 
-Creates `demo@jobtracker.dev` / `demo1234` with one job, one contact and one company.
+Creates the admin account `alexdesmet97@gmail.com` / `alex`. It does not add jobs.
 
 ## Tests
 
