@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
 import { StarRating } from '@/components/StarRating';
@@ -60,6 +60,7 @@ const DATE_FIELDS = [
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const interviewFocus = useSearchParams().get('interview') ?? '';
   const { user } = useAuth();
 
   const [job, setJob] = useState<Job | null>(null);
@@ -81,6 +82,11 @@ export default function JobDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!interviewFocus || !job) return;
+    document.getElementById('interview-tracking')?.scrollIntoView({ block: 'start' });
+  }, [interviewFocus, job]);
 
   async function patch(data: Partial<Job>) {
     const response = await api.updateJob(id, data);
@@ -262,9 +268,10 @@ export default function JobDetailPage() {
             </div>
           </section>
 
-          {job.status === 'Interviewing' ? (
+          {job.status === 'Interviewing' || (job.interviews?.length ?? 0) > 0 ? (
           <InterviewTracking
             jobId={id}
+            focusId={interviewFocus}
             interviews={job.interviews ?? []}
             onAdd={async () => {
               const response = await api.addInterview(id);

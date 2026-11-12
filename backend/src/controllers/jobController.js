@@ -133,6 +133,70 @@ function withDerived(jobDoc) {
   };
 }
 
+export const listMeetings = asyncHandler(async (req, res) => {
+  const jobs = await Job.find({ user: req.user._id, archived: false }).select(
+    'title companyName status interviews',
+  );
+  const meetings = [];
+  for (const job of jobs) {
+    const interviews = job.interviews || [];
+    for (let index = 0; index < interviews.length; index += 1) {
+      const interview = interviews[index];
+      if (!interview.date && !interview.startsAt) continue;
+      meetings.push({
+        jobId: job._id,
+        jobTitle: job.title,
+        companyName: job.companyName,
+        status: job.status,
+        step: index + 1,
+        interview: interview.toJSON(),
+      });
+    }
+  }
+  res.json({ meetings });
+});
+
+function parseDateTime(value, field) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw ApiError.badRequest(`${field} is not a valid time`);
+  return date;
+}
+
+export const createMeeting = asyncHandler(async (req, res) => {
+  const startsAt = parseDateTime(req.body.startsAt, 'Start');
+  const endsAt = parseDateTime(req.body.endsAt, 'End');
+  if (endsAt <= startsAt) throw ApiError.badRequest('End time must be after the start time');
+
+  const interviewer = String(req.body.interviewer || '').trim();
+  if (!interviewer) throw ApiError.badRequest('Interviewer name is required');
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id, archived: false });
+  if (!job) throw ApiError.notFound('Job not found');
+  if (job.status === 'Closed') throw ApiError.badRequest('Choose an active job');
+
+  const conversation = (Array.isArray(req.body.conversation) ? req.body.conversation : [])
+    .map((entry) => ({
+      speaker: String(entry?.speaker || '').trim().slice(0, 80),
+      message: String(entry?.message || '').trim().slice(0, 4000),
+    }))
+    .filter((entry) => entry.message)
+    .slice(0, 30);
+  const feedback = String(req.body.feedback || '').trim().slice(0, 4000);
+
+  job.interviews.push({
+    date: req.body.date ? parseCalendarDate(req.body.date, 'Meeting date') : startsAt,
+    startsAt,
+    endsAt,
+    type: 'Other',
+    interviewers: [{ name: interviewer.slice(0, 120), title: '' }],
+    conversation,
+    feedback: feedback ? [{ body: feedback }] : [],
+  });
+  await job.save();
+  const interview = job.interviews[job.interviews.length - 1];
+  res.status(201).json({ job: withDerived(job), interviewId: interview._id });
+});
+
 export const listJobs = asyncHandler(async (req, res) => {
   const { status, search, sort = 'order', archived } = req.query;
   const filter = { user: req.user._id };

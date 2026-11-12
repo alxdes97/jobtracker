@@ -202,6 +202,29 @@ check('keeps a hiring process of dated steps', async () => {
   assert.equal(removed.payload.job.hiringProcess[0].name, 'Recruiter screen');
 });
 
+check('saves a meeting onto the job and the calendar', async () => {
+  const created = await call('POST', `/api/jobs/${jobId}/meetings`, {
+    startsAt: '2026-11-18T18:00:00.000Z',
+    endsAt: '2026-11-18T19:00:00.000Z',
+    date: '2026-11-18',
+    interviewer: 'Avery Chen',
+    conversation: [{ speaker: 'Me', message: 'Walked through the design.' }],
+    feedback: 'Strong systems answers.',
+  });
+  assert.equal(created.status, 201);
+  const interview = created.payload.job.interviews.at(-1);
+  assert.equal(interview.interviewers[0].name, 'Avery Chen');
+  assert.equal(interview.conversation[0].message, 'Walked through the design.');
+  assert.equal(interview.feedback[0].body, 'Strong systems answers.');
+  assert.ok(interview.startsAt);
+
+  const calendar = await call('GET', '/api/calendar');
+  assert.equal(calendar.status, 200);
+  const meeting = calendar.payload.meetings.find((item) => item.interview._id === interview._id);
+  assert.ok(meeting);
+  assert.equal(meeting.step, created.payload.job.interviews.length);
+});
+
 check('adds, edits and removes a job note', async () => {
   const created = await call('POST', `/api/jobs/${jobId}/notes`, {
     body: 'Ask about the on-call rotation.',
@@ -223,23 +246,25 @@ check('tracks interviews, interviewers and a practice session', async () => {
   const created = await call('POST', `/api/jobs/${jobId}/interviews`);
   assert.equal(created.status, 201);
   const interviewId = created.payload.interviewId;
-  assert.equal(created.payload.job.interviews.length, 1);
+  const before = created.payload.job.interviews.length;
+  assert.ok(before >= 1);
+  const interviewOf = (payload) => payload.job.interviews.find((item) => item._id === interviewId);
 
   const updated = await call('PATCH', `/api/jobs/${jobId}/interviews/${interviewId}`, {
     date: '2026-10-02',
     type: 'Technical',
     format: 'Video',
   });
-  assert.equal(updated.payload.job.interviews[0].type, 'Technical');
-  assert.equal(updated.payload.job.interviews[0].format, 'Video');
-  assert.ok(updated.payload.job.interviews[0].date);
+  assert.equal(interviewOf(updated.payload).type, 'Technical');
+  assert.equal(interviewOf(updated.payload).format, 'Video');
+  assert.ok(interviewOf(updated.payload).date);
 
   const person = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/interviewers`, {
     name: 'Stephanie Scotto',
     title: 'Recruiter',
   });
   assert.equal(person.status, 201);
-  assert.equal(person.payload.job.interviews[0].interviewers[0].name, 'Stephanie Scotto');
+  assert.equal(interviewOf(person.payload).interviewers[0].name, 'Stephanie Scotto');
 
   const conversation = await call(
     'POST',
@@ -247,17 +272,17 @@ check('tracks interviews, interviewers and a practice session', async () => {
     { speaker: 'Interviewer', message: 'Walk me through a recent project.' },
   );
   assert.equal(conversation.status, 201);
-  assert.equal(conversation.payload.job.interviews[0].conversation[0].message, 'Walk me through a recent project.');
+  assert.equal(interviewOf(conversation.payload).conversation[0].message, 'Walk me through a recent project.');
 
   const feedback = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/feedback`, {
     body: 'Strong on system design, light on metrics.',
   });
-  assert.equal(feedback.payload.job.interviews[0].feedback[0].body, 'Strong on system design, light on metrics.');
+  assert.equal(interviewOf(feedback.payload).feedback[0].body, 'Strong on system design, light on metrics.');
 
   const practice = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/practice`, {
     notes: 'Rehearse the pipeline story.',
   });
-  assert.equal(practice.payload.job.interviews[0].practiceSessions.length, 1);
+  assert.equal(interviewOf(practice.payload).practiceSessions.length, 1);
 
   const attachmentForm = new FormData();
   attachmentForm.append(
@@ -271,7 +296,9 @@ check('tracks interviews, interviewers and a practice session', async () => {
   );
   const attachedPayload = await attached.json();
   assert.equal(attached.status, 201);
-  const attachment = attachedPayload.job.interviews[0].attachments[0];
+  const attachment = attachedPayload.job.interviews
+    .find((item) => item._id === interviewId)
+    .attachments[0];
   assert.equal(attachment.originalName, 'take-home.txt');
   assert.equal(attachment.storedName, undefined);
 
@@ -283,7 +310,8 @@ check('tracks interviews, interviewers and a practice session', async () => {
   assert.match(await downloaded.text(), /take-home notes/);
 
   const removed = await call('DELETE', `/api/jobs/${jobId}/interviews/${interviewId}`);
-  assert.equal(removed.payload.job.interviews.length, 0);
+  assert.equal(removed.payload.job.interviews.length, before - 1);
+  assert.equal(interviewOf(removed.payload), undefined);
 });
 
 check('attaches a file to the job and downloads it', async () => {

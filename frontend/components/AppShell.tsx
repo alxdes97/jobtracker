@@ -7,6 +7,7 @@ import { useAuth } from './AuthProvider';
 import {
   BriefcaseIcon,
   BuildingIcon,
+  CalendarIcon,
   DashboardIcon,
   DocumentIcon,
   LogoutIcon,
@@ -28,6 +29,12 @@ const SIDEBAR = [
     icon: DashboardIcon,
     active: (pathname: string) =>
       DASHBOARD_PAGES.some((page) => pathname.startsWith(page.href)),
+  },
+  {
+    href: '/calendar',
+    label: 'Calendar',
+    icon: CalendarIcon,
+    active: (pathname: string) => pathname.startsWith('/calendar'),
   },
   {
     href: '/resumes',
@@ -62,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <aside className="flex w-14 flex-col items-center justify-between border-r border-slate-200 bg-white py-3">
         <div className="flex flex-col items-center gap-4">
           <Link

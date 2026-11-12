@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon, PlusIcon, TrashIcon } from '@/components/Icons';
 import { downloadInterviewAttachment } from '@/lib/api';
 import { formatDate, toDateInput } from '@/lib/format';
@@ -9,6 +9,7 @@ import { INTERVIEW_FORMATS, INTERVIEW_TYPES, type Interview } from '@/lib/types'
 interface InterviewTrackingProps {
   jobId: string;
   interviews: Interview[];
+  focusId?: string;
   onAdd: () => Promise<string>;
   onUpdate: (interviewId: string, data: { date?: string | null; type?: string; format?: string }) => Promise<void>;
   onDelete: (interviewId: string) => Promise<void>;
@@ -36,6 +37,7 @@ function ordinal(index: number) {
 export function InterviewTracking({
   jobId,
   interviews,
+  focusId = '',
   onAdd,
   onUpdate,
   onDelete,
@@ -67,6 +69,12 @@ export function InterviewTracking({
 
   const selected =
     interviews.find((interview) => interview._id === selectedId) ?? interviews[0] ?? null;
+
+  useEffect(() => {
+    if (focusId && interviews.some((interview) => interview._id === focusId)) {
+      setSelectedId(focusId);
+    }
+  }, [focusId, interviews]);
 
   async function handleAdd() {
     setAdding(true);
@@ -162,7 +170,7 @@ export function InterviewTracking({
   }
 
   return (
-    <section className="card overflow-hidden">
+    <section id="interview-tracking" className="card overflow-hidden">
       <header className="border-b border-slate-200 px-4 py-3">
         <h3 className="text-sm font-semibold text-slate-800">Interview Tracking</h3>
       </header>
@@ -350,10 +358,11 @@ export function InterviewTracking({
                         className="flex items-start justify-between gap-2 rounded border border-slate-200 px-3 py-2 text-sm"
                       >
                         <div>
-                          <p className="text-xs text-slate-400">
-                            {entry.speaker || 'Note'}
-                            {entry.createdAt ? ` · ${formatDate(entry.createdAt)}` : ''}
-                          </p>
+                          {entry.speaker || entry.createdAt ? (
+                            <p className="text-xs text-slate-400">
+                              {[entry.speaker, entry.createdAt ? formatDate(entry.createdAt) : ''].filter(Boolean).join(' · ')}
+                            </p>
+                          ) : null}
                           <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{entry.message}</p>
                         </div>
                         <button

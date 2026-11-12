@@ -95,6 +95,8 @@ export interface InterviewAttachment {
 export interface Interview {
   _id: string;
   date: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
   type: string;
   format: string;
   interviewers: Interviewer[];
@@ -134,6 +136,15 @@ export interface JobContact {
   email?: string;
   companyName?: string;
   linkedin?: string;
+}
+
+export interface CalendarMeeting {
+  jobId: string;
+  jobTitle: string;
+  companyName: string;
+  status: JobStatus;
+  step: number;
+  interview: Interview;
 }
 
 export interface Job {

@@ -1,4 +1,5 @@
 import type {
+  CalendarMeeting,
   Company,
   CompanyTrack,
   Contact,
@@ -71,6 +72,18 @@ export const api = {
     request<{ token: string; user: User }>('/auth/login', { method: 'POST', body: body(data) }),
   me: () => request<{ user: User }>('/auth/me'),
 
+  listMeetings: () => request<{ meetings: CalendarMeeting[] }>('/calendar'),
+  createMeeting: (
+    id: string,
+    data: {
+      startsAt: string;
+      endsAt: string;
+      date: string;
+      interviewer: string;
+      conversation: { speaker: string; message: string }[];
+      feedback: string;
+    },
+  ) => request<{ job: Job; interviewId: string }>(`/jobs/${id}/meetings`, { method: 'POST', body: body(data) }),
   listJobs: (params: { search?: string; sort?: string; status?: string } = {}) => {
     const query = new URLSearchParams(
       Object.entries(params).filter(([, value]) => Boolean(value)) as [string, string][],

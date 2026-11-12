@@ -102,6 +102,8 @@ const feedbackNoteSchema = new mongoose.Schema(
 const interviewSchema = new mongoose.Schema(
   {
     date: { type: Date, default: null },
+    startsAt: { type: Date, default: null },
+    endsAt: { type: Date, default: null },
     type: { type: String, enum: [...INTERVIEW_TYPES, ''], default: '' },
     format: { type: String, enum: [...INTERVIEW_FORMATS, ''], default: '' },
     interviewers: { type: [interviewerSchema], default: [] },

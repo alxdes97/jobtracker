@@ -38,6 +38,8 @@ router.get('/auth/me', requireAuth, auth.me);
 router.use(requireAuth);
 
 router.get('/jobs', jobs.listJobs);
+router.get('/calendar', jobs.listMeetings);
+router.post('/jobs/:id/meetings', jobs.createMeeting);
 router.post('/jobs', jobs.createJob);
 router.get('/jobs/stats', jobs.jobStats);
 router.get('/jobs/export', jobs.exportJobs);
