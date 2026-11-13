@@ -7,6 +7,7 @@ import * as companies from '../controllers/companyController.js';
 import * as companyTracks from '../controllers/companyTrackController.js';
 import * as templates from '../controllers/templateController.js';
 import * as resumes from '../controllers/resumeController.js';
+import * as autokey from '../controllers/autokeyController.js';
 import {
   COMPANY_SIZES,
   COMPANY_TYPES,
@@ -39,6 +40,12 @@ router.use(requireAuth);
 
 router.get('/jobs', jobs.listJobs);
 router.get('/calendar', jobs.listMeetings);
+router.get('/autokey/reminders', autokey.listReminders);
+router.post('/autokey/reminders/ack', autokey.ackReminders);
+router.get('/autokey/config/export', autokey.exportConfig);
+router.get('/autokey/config', autokey.getConfig);
+router.put('/autokey/config', autokey.saveConfig);
+router.post('/autokey/config/import', autokey.importConfig);
 router.post('/jobs/:id/meetings', jobs.createMeeting);
 router.post('/jobs', jobs.createJob);
 router.get('/jobs/stats', jobs.jobStats);

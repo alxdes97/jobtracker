@@ -217,12 +217,75 @@ check('saves a meeting onto the job and the calendar', async () => {
   assert.equal(interview.conversation[0].message, 'Walked through the design.');
   assert.equal(interview.feedback[0].body, 'Strong systems answers.');
   assert.ok(interview.startsAt);
+  assert.equal(created.payload.job.status, 'Interviewing');
+  assert.ok(created.payload.job.checklist.some((item) => item.stage === 'Interviewing'));
 
   const calendar = await call('GET', '/api/calendar');
   assert.equal(calendar.status, 200);
   const meeting = calendar.payload.meetings.find((item) => item.interview._id === interview._id);
   assert.ok(meeting);
   assert.equal(meeting.step, created.payload.job.interviews.length);
+});
+
+check('requires sign-in before AutoKey can read reminders', async () => {
+  const saved = token;
+  token = '';
+  try {
+    const { status } = await call('GET', '/api/autokey/reminders');
+    assert.equal(status, 401);
+  } finally {
+    token = saved;
+  }
+});
+
+check('tells AutoKey which interviews in the next hour are due', async () => {
+  async function addMeeting(minutesAhead, interviewer) {
+    const startsAt = new Date(Date.now() + minutesAhead * 60 * 1000);
+    const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+    const created = await call('POST', `/api/jobs/${jobId}/meetings`, {
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      interviewer,
+    });
+    assert.equal(created.status, 201);
+    return created.payload.job.interviews.at(-1)._id;
+  }
+
+  const soonId = await addMeeting(20, 'Soon Person');
+  const closeId = await addMeeting(10, 'Close Person');
+  const laterId = await addMeeting(50, 'Later Person');
+  const farId = await addMeeting(180, 'Far Person');
+
+  const first = await call('GET', '/api/autokey/reminders');
+  assert.equal(first.status, 200);
+  const dueIds = first.payload.due.map((item) => item.interviewId);
+  assert.ok(dueIds.includes(soonId));
+  assert.ok(dueIds.includes(closeId));
+  assert.ok(dueIds.includes(laterId));
+  assert.equal(dueIds.includes(farId), false);
+
+  const soon = first.payload.due.find((item) => item.interviewId === soonId);
+  assert.equal(soon.companyName, 'Stride');
+  assert.equal(soon.interviewer, 'Soon Person');
+  assert.equal(soon.remindEveryMinutes, 10);
+  assert.match(soon.stepLabel, /^\d+(st|nd|rd|th) interview$/);
+  assert.match(soon.remainingLabel, /minute/);
+  const close = first.payload.due.find((item) => item.interviewId === closeId);
+  assert.equal(close.remindEveryMinutes, 5);
+  const later = first.payload.due.find((item) => item.interviewId === laterId);
+  assert.equal(later.remindEveryMinutes, 15);
+
+  const ack = await call('POST', '/api/autokey/reminders/ack', {
+    interviewIds: [soonId, '507f1f77bcf86cd799439011'],
+  });
+  assert.equal(ack.status, 200);
+  assert.deepEqual(ack.payload.acknowledged, [soonId]);
+
+  const second = await call('GET', '/api/autokey/reminders');
+  const dueAgain = second.payload.due.map((item) => item.interviewId);
+  assert.equal(dueAgain.includes(soonId), false);
+  assert.ok(dueAgain.includes(closeId));
+  assert.ok(second.payload.upcoming.some((item) => item.interviewId === soonId && item.due === false));
 });
 
 check('adds, edits and removes a job note', async () => {
@@ -472,6 +535,57 @@ check('exports CSV', async () => {
   assert.ok(csv.includes('AI Engineer'));
 });
 
+check('stores AutoKey hotkeys and clipboard settings on the signed-in account', async () => {
+  const savedToken = token;
+  token = '';
+  const locked = await call('GET', '/api/autokey/config');
+  token = savedToken;
+  assert.equal(locked.status, 401);
+
+  const empty = await call('GET', '/api/autokey/config');
+  assert.equal(empty.status, 200);
+  assert.equal(empty.payload.configured, false);
+
+  const saved = await call('PUT', '/api/autokey/config', {
+    bindings: [
+      { hotkey: 'ctrl+shift+a', file: 'C:\\notes\\intro.txt' },
+      { hotkey: 'ctrl+shift+a', file: 'C:\\notes\\duplicate.txt' },
+    ],
+    clipboard_transform: {
+      enabled: true,
+      pairs: [
+        { from: 'A', to: 'B' },
+        { from: '', to: 'skip' },
+      ],
+    },
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.payload.configured, true);
+  assert.equal(saved.payload.bindings.length, 1);
+  assert.equal(saved.payload.bindings[0].file, 'C:\\notes\\intro.txt');
+  assert.equal(saved.payload.clipboard_transform.enabled, true);
+  assert.deepEqual(saved.payload.clipboard_transform.pairs, [{ from: 'A', to: 'B' }]);
+
+  const exported = await call('GET', '/api/autokey/config/export');
+  assert.equal(exported.status, 200);
+  assert.equal(exported.payload.bindings[0].hotkey, 'ctrl+shift+a');
+  assert.equal(exported.payload.configured, undefined);
+
+  const imported = await call('POST', '/api/autokey/config/import', {
+    bindings: [{ hotkey: 'ctrl+alt+1', file: 'D:\\other.txt' }],
+    clipboard_transform: { enabled: false, pairs: [{ from: 'hello', to: 'hi' }] },
+  });
+  assert.equal(imported.status, 200);
+  assert.equal(imported.payload.bindings[0].hotkey, 'ctrl+alt+1');
+  assert.equal(imported.payload.clipboard_transform.enabled, false);
+
+  const again = await call('GET', '/api/autokey/config');
+  assert.equal(again.payload.bindings[0].file, 'D:\\other.txt');
+
+  const bad = await call('PUT', '/api/autokey/config', { bindings: 'nope' });
+  assert.equal(bad.status, 400);
+});
+
 check('keeps another user out of this data', async () => {
   const other = await call('POST', '/api/auth/register', {
     name: 'Other User',
@@ -486,6 +600,10 @@ check('keeps another user out of this data', async () => {
 
   const stolen = await call('GET', `/api/jobs/${jobId}`);
   assert.equal(stolen.status, 404);
+
+  const config = await call('GET', '/api/autokey/config');
+  assert.equal(config.payload.configured, false);
+  assert.equal(config.payload.bindings.length, 0);
 
   token = previousToken;
 });

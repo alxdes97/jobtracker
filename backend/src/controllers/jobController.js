@@ -101,6 +101,31 @@ function guidanceFor(status) {
   return (GUIDANCE_CHECKLIST[status] || []).map((label) => ({ label, stage: status, done: false }));
 }
 
+const BEFORE_INTERVIEWING = new Set(['Bookmarked', 'Applying', 'Applied']);
+
+/** An interview means the job has reached Interviewing, unless it is already further along. */
+async function advanceToInterviewing(job) {
+  if (job.archived || !BEFORE_INTERVIEWING.has(job.status) || !job.interviews?.length) return false;
+  const previousStatus = job.status;
+  const last = await Job.findOne({ user: job.user, status: 'Interviewing', _id: { $ne: job._id } })
+    .sort({ order: -1 })
+    .select('order');
+  job.status = 'Interviewing';
+  job.order = (last?.order ?? -1) + 1;
+  job.statusHistory.push({ status: 'Interviewing', changedAt: new Date() });
+  if (!job.checklist.some((item) => item.stage === 'Interviewing')) {
+    job.checklist.push(...guidanceFor('Interviewing'));
+  }
+  await job.save();
+  const column = await Job.find({ user: job.user, status: previousStatus }).sort({ order: 1 });
+  await Promise.all(
+    column.map((item, index) =>
+      item.order === index ? null : Job.updateOne({ _id: item._id }, { order: index }),
+    ),
+  );
+  return true;
+}
+
 const STANDARD_HIRING_STEPS = [
   'Recruiter screen',
   'Hiring manager',
@@ -192,7 +217,7 @@ export const createMeeting = asyncHandler(async (req, res) => {
     conversation,
     feedback: feedback ? [{ body: feedback }] : [],
   });
-  await job.save();
+  if (!(await advanceToInterviewing(job))) await job.save();
   const interview = job.interviews[job.interviews.length - 1];
   res.status(201).json({ job: withDerived(job), interviewId: interview._id });
 });
@@ -219,6 +244,7 @@ export const listJobs = asyncHandler(async (req, res) => {
   };
 
   const jobs = await Job.find(filter).sort(sortMap[sort] || sortMap.order);
+  for (const job of jobs) await advanceToInterviewing(job);
   res.json({ jobs: jobs.map((job) => withDerived(job)) });
 });
 
@@ -238,6 +264,7 @@ export const getJob = asyncHandler(async (req, res) => {
     'firstName lastName jobTitle email companyName linkedin',
   );
   if (!job) throw ApiError.notFound('Job not found');
+  await advanceToInterviewing(job);
   res.json({ job: withDerived(job) });
 });
 
@@ -531,7 +558,7 @@ export const addInterview = asyncHandler(async (req, res) => {
   if (!job) throw ApiError.notFound('Job not found');
 
   job.interviews.push({});
-  await job.save();
+  if (!(await advanceToInterviewing(job))) await job.save();
   const interview = job.interviews[job.interviews.length - 1];
   res.status(201).json({ job: withDerived(job), interviewId: interview._id });
 });
