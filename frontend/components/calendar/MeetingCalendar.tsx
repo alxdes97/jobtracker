@@ -6,8 +6,9 @@ import { Modal } from '@/components/Modal';
 import { PlusIcon } from '@/components/Icons';
 import { api, downloadInterviewAttachment } from '@/lib/api';
 import { classNames } from '@/lib/format';
+import { jobProfileNames, profileNameOf } from '@/lib/resumeProfile';
 import { useTheme, type Theme } from '@/lib/theme';
-import type { CalendarMeeting, Job } from '@/lib/types';
+import type { CalendarMeeting, Job, ResumeFile } from '@/lib/types';
 
 type View = 'day' | 'week' | 'month';
 
@@ -1406,8 +1407,14 @@ function CreateMeetingModal({
   const [creatingJob, setCreatingJob] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCompany, setNewCompany] = useState('');
+  const [resumes, setResumes] = useState<ResumeFile[]>([]);
+  const [profile, setProfile] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const profiles = useMemo(
+    () => [...new Set(resumes.map(profileNameOf).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [resumes],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -1431,10 +1438,20 @@ function CreateMeetingModal({
     setConversation('');
     setFeedback('');
     setFile(null);
+    setProfile('');
     setError('');
+    const savedProfile = window.localStorage.getItem('job-tracker-profile') || '';
     api.listJobs().then((response) => {
       setJobs(response.jobs.filter((job) => job.status !== 'Closed'));
     }).catch(() => setJobs([]));
+    api.listResumes().then((response) => {
+      setResumes(response.resumes);
+      const names = new Set(response.resumes.map(profileNameOf));
+      setProfile(names.has(savedProfile) ? savedProfile : '');
+    }).catch(() => {
+      setResumes([]);
+      setProfile('');
+    });
   }, [open, proposed]);
 
   const selected = jobs.find((job) => job._id === jobId);
@@ -1490,18 +1507,27 @@ function CreateMeetingModal({
         conversation: history,
         feedback: feedback.trim(),
       });
+      const warnings: string[] = [];
+      const resume = profile ? resumes.find((item) => profileNameOf(item) === profile) : undefined;
+      const currentJob = jobs.find((job) => job._id === targetId);
+      const alreadyLinked = Boolean(
+        resume && (currentJob?.resumes ?? []).some((item) => item.libraryResume === resume._id),
+      );
+      if (resume && !alreadyLinked) {
+        try {
+          await api.linkLibraryResume(targetId, resume._id);
+        } catch (linkError) {
+          warnings.push(linkError instanceof Error ? linkError.message : 'The profile was not linked.');
+        }
+      }
       if (file) {
         try {
           await api.uploadInterviewAttachment(targetId, created.interviewId, file);
         } catch (uploadError) {
-          const warning = uploadError instanceof Error
-            ? `Saved the meeting, but the file was not attached. ${uploadError.message}`
-            : 'Saved the meeting, but the file was not attached.';
-          await onCreated(start, warning);
-          return;
+          warnings.push(uploadError instanceof Error ? uploadError.message : 'The file was not attached.');
         }
       }
-      await onCreated(start);
+      await onCreated(start, warnings.length ? `Saved the meeting. ${warnings.join(' ')}` : undefined);
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : 'Could not save the meeting';
       setError(jobWasCreated ? `Added the job, but the meeting was not saved. ${message}` : message);
@@ -1611,6 +1637,8 @@ function CreateMeetingModal({
                       setJobId(job._id);
                       setQuery(`${job.title} — ${job.companyName}`);
                       setOpenList(false);
+                      const used = jobProfileNames(job, resumes);
+                      if (used[0]) setProfile(used[0]);
                     }}
                   >
                     <span className="font-medium text-slate-800">{job.title}</span>
@@ -1621,6 +1649,22 @@ function CreateMeetingModal({
             </ul>
           ) : null}
         </div>
+        <label className="block text-sm text-slate-600" htmlFor="meeting-profile">
+          Profile used
+          <select
+            id="meeting-profile"
+            className="input mt-1"
+            value={profile}
+            onChange={(event) => setProfile(event.target.value)}
+          >
+            <option value="">Select a profile</option>
+            {profiles.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="block text-sm text-slate-600">
           Conversation history
