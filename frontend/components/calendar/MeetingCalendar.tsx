@@ -230,6 +230,7 @@ export function MeetingCalendar() {
     if (view === 'month') return;
     const node = gridRef.current;
     if (!node) return;
+    if (node.dataset.dragging === '1') return undefined;
     const frame = requestAnimationFrame(() => {
       const current = new Date();
       const visible = (view === 'day' ? [startOfDay(cursor)] : Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(cursor), index)))
@@ -252,6 +253,45 @@ export function MeetingCalendar() {
     event.stopPropagation();
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     setMenu({ meeting, x: rect.left, y: Math.min(rect.bottom + 4, window.innerHeight - 96) });
+  }
+
+  function openMenuAt(meeting: CalendarMeeting, x: number, y: number) {
+    setMenu({ meeting, x, y: Math.min(y + 4, window.innerHeight - 96) });
+  }
+
+  async function moveMeeting(meeting: CalendarMeeting, start: Date, end: Date) {
+    const previous = meetings;
+    setMeetings((current) =>
+      current.map((item) =>
+        item.interview._id === meeting.interview._id
+          ? {
+              ...item,
+              interview: {
+                ...item.interview,
+                startsAt: start.toISOString(),
+                endsAt: end.toISOString(),
+                date: start.toISOString(),
+              },
+            }
+          : item,
+      ),
+    );
+    try {
+      const response = await api.updateInterview(meeting.jobId, meeting.interview._id, {
+        startsAt: start.toISOString(),
+        endsAt: end.toISOString(),
+      });
+      const saved = response.job.interviews.find((item) => item._id === meeting.interview._id);
+      if (!saved) return;
+      setMeetings((current) =>
+        current.map((item) =>
+          item.interview._id === saved._id ? { ...item, interview: { ...item.interview, ...saved } } : item,
+        ),
+      );
+    } catch (moveError) {
+      setMeetings(previous);
+      setError(moveError instanceof Error ? moveError.message : 'Could not move the meeting');
+    }
   }
 
   const days = view === 'day' ? [startOfDay(cursor)] : Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(cursor), index));
@@ -312,6 +352,9 @@ export function MeetingCalendar() {
             setView('day');
           }}
           onOpenMenu={openMenu}
+          onOpenAt={openMenuAt}
+          onMoveMeeting={moveMeeting}
+          onShift={shift}
         />
       ) : (
         <TimeGrid
@@ -319,7 +362,9 @@ export function MeetingCalendar() {
           theme={theme}
           days={days}
           meetings={placed}
-          onOpenMenu={openMenu}
+          onOpenAt={openMenuAt}
+          onMoveMeeting={moveMeeting}
+          onShift={shift}
           onCreateRange={(start, end) => {
             setProposed({ start: localDateTimeValue(start), end: localDateTimeValue(end) });
             setCreating(true);
@@ -407,19 +452,74 @@ function atMinutes(day: Date, minutes: number) {
   return date;
 }
 
+let suppressChipClickUntil = 0;
+
+const EDGE_PX = 56;
+const EDGE_DELAY_MS = 650;
+const EDGE_REPEAT_MS = 800;
+
+function edgeDirection(rect: DOMRect, clientX: number): -1 | 0 | 1 {
+  if (clientX <= rect.left + EDGE_PX) return -1;
+  if (clientX >= rect.right - EDGE_PX) return 1;
+  return 0;
+}
+
+function createEdgePager(onShift: (direction: -1 | 1) => void, onDirection: (direction: -1 | 0 | 1) => void) {
+  let direction: -1 | 0 | 1 = 0;
+  let timer = 0;
+  return {
+    update(next: -1 | 0 | 1) {
+      if (next === direction) return;
+      window.clearTimeout(timer);
+      timer = 0;
+      direction = next;
+      onDirection(next);
+      if (!next) return;
+      const step = () => {
+        if (direction !== next) return;
+        onShift(next);
+        timer = window.setTimeout(step, EDGE_REPEAT_MS);
+      };
+      timer = window.setTimeout(step, EDGE_DELAY_MS);
+    },
+    clear() {
+      window.clearTimeout(timer);
+      timer = 0;
+      if (direction !== 0) onDirection(0);
+      direction = 0;
+    },
+  };
+}
+
+interface MeetingMove {
+  meeting: CalendarMeeting;
+  durationMs: number;
+  originX: number;
+  originY: number;
+  x: number;
+  y: number;
+  moved: boolean;
+  day: Date | null;
+  startMin: number | null;
+}
+
 function TimeGrid({
   gridRef,
   days,
   meetings,
   theme,
-  onOpenMenu,
+  onOpenAt,
+  onMoveMeeting,
+  onShift,
   onCreateRange,
 }: {
   gridRef: React.RefObject<HTMLDivElement>;
   days: Date[];
   meetings: PlacedMeeting[];
   theme: Theme;
-  onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
+  onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
+  onMoveMeeting: (meeting: CalendarMeeting, start: Date, end: Date) => void;
+  onShift: (direction: number) => void;
   onCreateRange: (start: Date, end: Date) => void;
 }) {
   const [now, setNow] = useState(() => new Date());
@@ -475,6 +575,159 @@ function TimeGrid({
   const [drag, setDrag] = useState<TimeDrag | null>(null);
   const dragRef = useRef<TimeDrag | null>(null);
   dragRef.current = drag;
+  const [move, setMove] = useState<MeetingMove | null>(null);
+  const [edgeHint, setEdgeHint] = useState<-1 | 0 | 1>(0);
+  const moveRef = useRef<MeetingMove | null>(null);
+  const moveSession = useRef<{ stop: () => void } | null>(null);
+  const columnRefs = useRef(new Map<string, HTMLDivElement>());
+  const daysRef = useRef(days);
+  const onShiftRef = useRef(onShift);
+  const onMoveRef = useRef(onMoveMeeting);
+  const onOpenAtRef = useRef(onOpenAt);
+  daysRef.current = days;
+  onShiftRef.current = onShift;
+  onMoveRef.current = onMoveMeeting;
+  onOpenAtRef.current = onOpenAt;
+  const dayKey = days.map((day) => day.toDateString()).join('|');
+
+  function locateMove(clientX: number, clientY: number) {
+    let nearest: { day: Date; startMin: number; distance: number } | null = null;
+    for (const day of daysRef.current) {
+      const node = columnRefs.current.get(day.toISOString());
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      const minutes = ((clientY - rect.top) / HOUR_PX) * 60;
+      const snapped = Math.floor(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+      const startMin = Math.min(Math.max(snapped, 0), 24 * 60 - SNAP_MINUTES);
+      if (clientX >= rect.left && clientX <= rect.right) return { day, startMin };
+      const distance = clientX < rect.left ? rect.left - clientX : clientX - rect.right;
+      if (!nearest || distance < nearest.distance) nearest = { day, startMin, distance };
+    }
+    return nearest && nearest.distance <= 80 ? { day: nearest.day, startMin: nearest.startMin } : null;
+  }
+
+  useEffect(() => {
+    const current = moveRef.current;
+    if (!current?.moved) return;
+    const placed = locateMove(current.x, current.y);
+    if (!placed) return;
+    const next = { ...current, ...placed };
+    moveRef.current = next;
+    setMove(next);
+  }, [dayKey]);
+
+  useEffect(() => () => moveSession.current?.stop(), []);
+
+  function beginMove(event: React.PointerEvent, item: PlacedMeeting) {
+    moveSession.current?.stop();
+    const durationMs = Math.max(item.end.getTime() - item.start.getTime(), SNAP_MINUTES * 60 * 1000);
+    const initial: MeetingMove = {
+      meeting: item.meeting,
+      durationMs,
+      originX: event.clientX,
+      originY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      day: startOfDay(item.start),
+      startMin: item.start.getHours() * 60 + item.start.getMinutes(),
+    };
+    moveRef.current = initial;
+    setMove(initial);
+    if (gridRef.current) gridRef.current.dataset.dragging = '1';
+
+    const pager = createEdgePager(
+      (direction) => {
+        const current = moveRef.current;
+        if (current) moveRef.current = { ...current, moved: true };
+        onShiftRef.current(direction);
+      },
+      setEdgeHint,
+    );
+    let scrollDir = 0;
+    let frame = 0;
+    const tick = () => {
+      const node = gridRef.current;
+      const current = moveRef.current;
+      if (node && current && scrollDir) {
+        node.scrollTop += scrollDir * 14;
+        const placed = locateMove(current.x, current.y);
+        if (placed) {
+          const next = { ...current, ...placed };
+          moveRef.current = next;
+          setMove(next);
+        }
+      }
+      frame = window.requestAnimationFrame(tick);
+    };
+    frame = window.requestAnimationFrame(tick);
+
+    function onPointerMove(pointer: PointerEvent) {
+      const current = moveRef.current;
+      if (!current) return;
+      const moved = current.moved || Math.hypot(pointer.clientX - current.originX, pointer.clientY - current.originY) > 5;
+      const placed = locateMove(pointer.clientX, pointer.clientY);
+      const next = {
+        ...current,
+        x: pointer.clientX,
+        y: pointer.clientY,
+        moved,
+        day: placed?.day ?? current.day,
+        startMin: placed?.startMin ?? current.startMin,
+      };
+      moveRef.current = next;
+      setMove(next);
+      const rect = gridRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      pager.update(edgeDirection(rect, pointer.clientX));
+      if (pointer.clientY < rect.top + 48) scrollDir = -1;
+      else if (pointer.clientY > rect.bottom - 48) scrollDir = 1;
+      else scrollDir = 0;
+    }
+
+    function finish(pointer: PointerEvent) {
+      const current = moveRef.current;
+      const placed = current ? locateMove(pointer.clientX, pointer.clientY) : null;
+      stop();
+      moveRef.current = null;
+      setMove(null);
+      setEdgeHint(0);
+      if (!current) return;
+      if (!current.moved) {
+        onOpenAtRef.current(current.meeting, pointer.clientX, pointer.clientY);
+        return;
+      }
+      const target = placed ?? (current.day && current.startMin != null ? { day: current.day, startMin: current.startMin } : null);
+      if (!target) return;
+      const start = atMinutes(target.day, target.startMin);
+      const original = current.meeting.interview.startsAt ? new Date(current.meeting.interview.startsAt).getTime() : 0;
+      if (Math.abs(start.getTime() - original) < 60 * 1000) return;
+      onMoveRef.current(current.meeting, start, new Date(start.getTime() + current.durationMs));
+    }
+
+    function cancelMove() {
+      stop();
+      moveRef.current = null;
+      setMove(null);
+      setEdgeHint(0);
+    }
+
+    function stop() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', cancelMove);
+      window.cancelAnimationFrame(frame);
+      pager.clear();
+      scrollDir = 0;
+      if (gridRef.current) delete gridRef.current.dataset.dragging;
+      moveSession.current = null;
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', cancelMove);
+    moveSession.current = { stop };
+  }
 
   function beginDrag(event: React.PointerEvent<HTMLDivElement>, day: Date) {
     if (event.button !== 0) return;
@@ -602,6 +855,11 @@ function TimeGrid({
           return (
             <div
               key={day.toISOString()}
+              ref={(node) => {
+                const key = day.toISOString();
+                if (node) columnRefs.current.set(key, node);
+                else columnRefs.current.delete(key);
+              }}
               className="relative select-none border-l border-slate-200"
               onPointerDown={(event) => beginDrag(event, day)}
               onPointerMove={(event) => moveDrag(event, day)}
@@ -621,7 +879,7 @@ function TimeGrid({
                   <button
                     key={item.meeting.interview._id}
                     type="button"
-                    className="absolute overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left text-[12px] leading-snug"
+                    className="absolute cursor-grab touch-none overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left text-[12px] leading-snug"
                     title={interviewStepLabel(item.meeting.step || 1)}
                     style={{
                       top: style.top,
@@ -631,14 +889,33 @@ function TimeGrid({
                       background: tone.bg,
                       borderLeftColor: tone.border,
                       color: tone.text,
+                      opacity: move?.meeting.interview._id === item.meeting.interview._id ? 0.35 : 1,
                     }}
-                    onClick={(event) => onOpenMenu(item.meeting, event)}
+                    onPointerDown={(event) => {
+                      if (event.button !== 0) return;
+                      event.stopPropagation();
+                      event.preventDefault();
+                      beginMove(event, item);
+                    }}
                   >
                     <span className="block truncate font-medium">{formatTime(item.start)} {interviewStepLabel(item.meeting.step || 1)}</span>
                     <span className="block truncate opacity-80">{item.meeting.jobTitle}</span>
                   </button>
                 );
               })}
+              {move?.moved && move.day && move.startMin != null && sameDay(move.day, day) ? (
+                <div
+                  className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-md border border-brand-700 bg-brand-50 px-1.5 py-1 text-[12px] leading-snug text-brand-800"
+                  style={{
+                    top: (move.startMin / 60) * HOUR_PX,
+                    height: Math.max((Math.min(move.durationMs / 60000, 24 * 60 - move.startMin) / 60) * HOUR_PX - 2, 20),
+                  }}
+                >
+                  <span className="block truncate font-medium">
+                    {formatTime(atMinutes(day, move.startMin))} {move.meeting.jobTitle}
+                  </span>
+                </div>
+              ) : null}
               {drag && sameDay(drag.day, day) ? (
                 <div
                   className="pointer-events-none absolute inset-x-1 z-20 overflow-hidden rounded-md border border-brand-400 bg-brand-50 px-1.5 py-1 text-[12px] leading-snug text-brand-800"
@@ -665,6 +942,28 @@ function TimeGrid({
           );
         })}
       </div>
+      {edgeHint !== 0 && gridRef.current ? (
+        <div
+          className="pointer-events-none fixed z-40 w-1.5 bg-brand-500/80"
+          style={{
+            top: gridRef.current.getBoundingClientRect().top,
+            height: gridRef.current.getBoundingClientRect().height,
+            left: edgeHint < 0 ? gridRef.current.getBoundingClientRect().left : gridRef.current.getBoundingClientRect().right - 6,
+          }}
+        />
+      ) : null}
+      {move?.moved ? (
+        <div
+          className="pointer-events-none fixed z-50 max-w-xs rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 shadow-lg"
+          style={{ left: move.x + 14, top: move.y + 14 }}
+        >
+          {move.day && move.startMin != null
+            ? `${WEEKDAYS[move.day.getDay()].slice(0, 3)} ${formatTime(atMinutes(move.day, move.startMin))}`
+            : 'Move meeting'}
+          {' · '}
+          {move.meeting.jobTitle}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -751,20 +1050,141 @@ function MonthView({
   theme,
   onOpenDay,
   onOpenMenu,
+  onOpenAt,
+  onMoveMeeting,
+  onShift,
 }: {
   cursor: Date;
   meetings: PlacedMeeting[];
   theme: Theme;
   onOpenDay: (day: Date) => void;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
+  onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
+  onMoveMeeting: (meeting: CalendarMeeting, start: Date, end: Date) => void;
+  onShift: (direction: number) => void;
 }) {
   const cells = monthGrid(cursor);
   const weeks = cells.length / 7;
   const today = new Date();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [move, setMove] = useState<MeetingMove | null>(null);
+  const [edgeHint, setEdgeHint] = useState<-1 | 0 | 1>(0);
+  const moveRef = useRef<MeetingMove | null>(null);
+  const session = useRef<{ stop: () => void } | null>(null);
+  const onShiftRef = useRef(onShift);
+  const onMoveRef = useRef(onMoveMeeting);
+  const onOpenAtRef = useRef(onOpenAt);
+  onShiftRef.current = onShift;
+  onMoveRef.current = onMoveMeeting;
+  onOpenAtRef.current = onOpenAt;
+  const monthKey = `${cursor.getFullYear()}-${cursor.getMonth()}`;
+
+  function dayFromPoint(clientX: number, clientY: number) {
+    const node = document.elementFromPoint(clientX, clientY);
+    const cell = node?.closest('[data-day]');
+    if (!cell || !rootRef.current?.contains(cell)) return null;
+    const stamp = cell.getAttribute('data-day');
+    if (!stamp) return null;
+    const day = new Date(stamp);
+    return Number.isNaN(day.getTime()) ? null : startOfDay(day);
+  }
+
+  useEffect(() => {
+    const current = moveRef.current;
+    if (!current?.moved) return;
+    const day = dayFromPoint(current.x, current.y);
+    if (!day) return;
+    const next = { ...current, day };
+    moveRef.current = next;
+    setMove(next);
+  }, [monthKey]);
+
+  useEffect(() => () => session.current?.stop(), []);
+
+  function beginMonthMove(event: React.PointerEvent, item: PlacedMeeting) {
+    if (item.allDay || !item.meeting.interview.startsAt) return;
+    session.current?.stop();
+    const durationMs = Math.max(item.end.getTime() - item.start.getTime(), SNAP_MINUTES * 60 * 1000);
+    const initial: MeetingMove = {
+      meeting: item.meeting,
+      durationMs,
+      originX: event.clientX,
+      originY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      day: startOfDay(item.start),
+      startMin: item.start.getHours() * 60 + item.start.getMinutes(),
+    };
+    moveRef.current = initial;
+    setMove(initial);
+    const pager = createEdgePager(
+      (direction) => {
+        const current = moveRef.current;
+        if (current) moveRef.current = { ...current, moved: true };
+        onShiftRef.current(direction);
+      },
+      setEdgeHint,
+    );
+
+    function onPointerMove(pointer: PointerEvent) {
+      const current = moveRef.current;
+      if (!current) return;
+      const moved = current.moved || Math.hypot(pointer.clientX - current.originX, pointer.clientY - current.originY) > 5;
+      const day = dayFromPoint(pointer.clientX, pointer.clientY);
+      const next = { ...current, x: pointer.clientX, y: pointer.clientY, moved, day: day ?? current.day };
+      moveRef.current = next;
+      setMove(next);
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (rect) pager.update(edgeDirection(rect, pointer.clientX));
+    }
+
+    function finish(pointer: PointerEvent) {
+      const current = moveRef.current;
+      const day = current ? dayFromPoint(pointer.clientX, pointer.clientY) ?? current.day : null;
+      stop();
+      moveRef.current = null;
+      setMove(null);
+      setEdgeHint(0);
+      suppressChipClickUntil = Date.now() + 400;
+      if (!current) return;
+      if (!current.moved) {
+        onOpenAtRef.current(current.meeting, pointer.clientX, pointer.clientY);
+        return;
+      }
+      if (!day || !current.meeting.interview.startsAt) return;
+      const original = new Date(current.meeting.interview.startsAt);
+      const start = new Date(day);
+      start.setHours(original.getHours(), original.getMinutes(), 0, 0);
+      if (Math.abs(start.getTime() - original.getTime()) < 60 * 1000) return;
+      onMoveRef.current(current.meeting, start, new Date(start.getTime() + current.durationMs));
+    }
+
+    function cancelMove() {
+      stop();
+      moveRef.current = null;
+      setMove(null);
+      setEdgeHint(0);
+    }
+
+    function stop() {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', cancelMove);
+      pager.clear();
+      session.current = null;
+    }
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', cancelMove);
+    session.current = { stop };
+  }
 
   return (
     <div
-      className="grid min-h-0 flex-1 border-l border-t border-slate-200"
+      ref={rootRef}
+      className="relative grid min-h-0 flex-1 border-l border-t border-slate-200"
       style={{
         gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
         gridTemplateRows: `repeat(${weeks}, minmax(0, 1fr))`,
@@ -777,8 +1197,16 @@ function MonthView({
         const visible = items.slice(0, 3);
         const hidden = items.length - visible.length;
         const label = day.getDate() === 1 ? `${MONTHS_SHORT[day.getMonth()]} ${day.getDate()}` : String(day.getDate());
+        const targeted = Boolean(move?.moved && move.day && sameDay(move.day, day));
         return (
-          <div key={day.toISOString()} className="flex min-h-0 flex-col overflow-hidden border-b border-r border-slate-200">
+          <div
+            key={day.toISOString()}
+            data-day={day.toISOString()}
+            className={classNames(
+              'flex min-h-0 flex-col overflow-hidden border-b border-r border-slate-200',
+              targeted && 'bg-brand-50',
+            )}
+          >
             {index < 7 ? (
               <div className="px-2 pt-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
                 {WEEKDAYS[day.getDay()].slice(0, 3)}
@@ -799,7 +1227,20 @@ function MonthView({
             </div>
             <div className="mt-0.5 min-h-0 flex-1 space-y-0.5 overflow-hidden px-1 pb-1">
               {visible.map((item) => (
-                <EventChip key={item.meeting.interview._id} item={item} theme={theme} onOpenMenu={onOpenMenu} pill />
+                <EventChip
+                  key={item.meeting.interview._id}
+                  item={item}
+                  theme={theme}
+                  onOpenMenu={onOpenMenu}
+                  pill
+                  dragging={move?.meeting.interview._id === item.meeting.interview._id}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0 || item.allDay) return;
+                    event.stopPropagation();
+                    event.preventDefault();
+                    beginMonthMove(event, item);
+                  }}
+                />
               ))}
               {hidden > 0 ? (
                 <button type="button" className="px-1 text-[11px] text-slate-500 hover:underline" onClick={() => onOpenDay(day)}>
@@ -810,6 +1251,27 @@ function MonthView({
           </div>
         );
       })}
+      {edgeHint !== 0 && rootRef.current ? (
+        <div
+          className="pointer-events-none fixed z-40 w-1.5 bg-brand-500/80"
+          style={{
+            top: rootRef.current.getBoundingClientRect().top,
+            height: rootRef.current.getBoundingClientRect().height,
+            left: edgeHint < 0 ? rootRef.current.getBoundingClientRect().left : rootRef.current.getBoundingClientRect().right - 6,
+          }}
+        />
+      ) : null}
+      {move?.moved && move.day ? (
+        <div
+          className="pointer-events-none fixed z-50 max-w-xs rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 shadow-lg"
+          style={{ left: move.x + 14, top: move.y + 14 }}
+        >
+          {WEEKDAYS[move.day.getDay()].slice(0, 3)} {MONTHS_SHORT[move.day.getMonth()]} {move.day.getDate()}
+          {move.startMin != null ? ` ${formatTime(atMinutes(move.day, move.startMin))}` : ''}
+          {' · '}
+          {move.meeting.jobTitle}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -818,11 +1280,15 @@ function EventChip({
   item,
   theme,
   onOpenMenu,
+  onPointerDown,
+  dragging = false,
   pill = false,
 }: {
   item: PlacedMeeting;
   theme: Theme;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
+  onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  dragging?: boolean;
   pill?: boolean;
 }) {
   const tone = colorFor(item.meeting.jobId, theme);
@@ -832,10 +1298,18 @@ function EventChip({
       className={classNames(
         'block w-full truncate border-l-[3px] text-left text-[12px] leading-4',
         pill ? 'rounded px-1.5 py-0.5' : 'rounded px-1',
+        onPointerDown && !item.allDay && 'cursor-grab touch-none',
       )}
       title={interviewStepLabel(item.meeting.step || 1)}
-      style={{ background: tone.bg, borderLeftColor: tone.border, color: tone.text }}
-      onClick={(event) => onOpenMenu(item.meeting, event)}
+      style={{ background: tone.bg, borderLeftColor: tone.border, color: tone.text, opacity: dragging ? 0.35 : 1 }}
+      onPointerDown={onPointerDown}
+      onClick={(event) => {
+        if (Date.now() < suppressChipClickUntil || dragging) {
+          event.stopPropagation();
+          return;
+        }
+        onOpenMenu(item.meeting, event);
+      }}
     >
       {item.allDay
         ? `${interviewStepLabel(item.meeting.step || 1)} · ${item.meeting.jobTitle}`

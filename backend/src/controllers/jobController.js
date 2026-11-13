@@ -621,6 +621,17 @@ export const updateInterview = asyncHandler(async (req, res) => {
     }
     interview.format = format;
   }
+  if ('startsAt' in req.body || 'endsAt' in req.body) {
+    if (!req.body.startsAt || !req.body.endsAt) {
+      throw ApiError.badRequest('Start and end times are required');
+    }
+    const startsAt = parseDateTime(req.body.startsAt, 'Start');
+    const endsAt = parseDateTime(req.body.endsAt, 'End');
+    if (endsAt <= startsAt) throw ApiError.badRequest('End time must be after the start time');
+    interview.startsAt = startsAt;
+    interview.endsAt = endsAt;
+    interview.date = startsAt;
+  }
 
   await job.save();
   res.json({ job: withDerived(job) });

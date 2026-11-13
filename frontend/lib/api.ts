@@ -153,7 +153,7 @@ export const api = {
   updateInterview: (
     id: string,
     interviewId: string,
-    data: { date?: string | null; type?: string; format?: string },
+    data: { date?: string | null; type?: string; format?: string; startsAt?: string; endsAt?: string },
   ) =>
     request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}`, {
       method: 'PATCH',

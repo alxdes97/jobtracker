@@ -322,6 +322,13 @@ check('tracks interviews, interviewers and a practice session', async () => {
   assert.equal(interviewOf(updated.payload).format, 'Video');
   assert.ok(interviewOf(updated.payload).date);
 
+  const moved = await call('PATCH', `/api/jobs/${jobId}/interviews/${interviewId}`, {
+    startsAt: '2026-11-20T15:00:00.000Z',
+    endsAt: '2026-11-20T16:00:00.000Z',
+  });
+  assert.equal(new Date(interviewOf(moved.payload).startsAt).toISOString(), '2026-11-20T15:00:00.000Z');
+  assert.equal(new Date(interviewOf(moved.payload).endsAt).toISOString(), '2026-11-20T16:00:00.000Z');
+
   const person = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/interviewers`, {
     name: 'Stephanie Scotto',
     title: 'Recruiter',
