@@ -6,6 +6,7 @@ import { Modal } from '@/components/Modal';
 import { PlusIcon } from '@/components/Icons';
 import { api, downloadInterviewAttachment } from '@/lib/api';
 import { classNames } from '@/lib/format';
+import { useTheme, type Theme } from '@/lib/theme';
 import type { CalendarMeeting, Job } from '@/lib/types';
 
 type View = 'day' | 'week' | 'month';
@@ -21,18 +22,20 @@ const START_HOUR = 0;
 const END_HOUR = 24;
 const HOUR_PX = 48;
 const COLORS = [
-  { bg: '#e8f0fe', border: '#1a73e8', text: '#174ea6' },
-  { bg: '#e6f4ea', border: '#188038', text: '#0d652d' },
-  { bg: '#fef7e0', border: '#f9ab00', text: '#7a4f01' },
-  { bg: '#fce8e6', border: '#d93025', text: '#a50e0e' },
-  { bg: '#f3e8fd', border: '#9334e6', text: '#681da8' },
-  { bg: '#e0f7fa', border: '#0097a7', text: '#006064' },
+  { bg: '#e8f0fe', border: '#1a73e8', text: '#174ea6', nightBg: '#10233f', nightText: '#d2e3fc' },
+  { bg: '#e6f4ea', border: '#188038', text: '#0d652d', nightBg: '#0d2818', nightText: '#ceead6' },
+  { bg: '#fef7e0', border: '#f9ab00', text: '#7a4f01', nightBg: '#3a2c00', nightText: '#feefc3' },
+  { bg: '#fce8e6', border: '#d93025', text: '#a50e0e', nightBg: '#3b1512', nightText: '#fad2cf' },
+  { bg: '#f3e8fd', border: '#9334e6', text: '#681da8', nightBg: '#2d1540', nightText: '#e9d2fd' },
+  { bg: '#e0f7fa', border: '#0097a7', text: '#006064', nightBg: '#063238', nightText: '#cbf0f4' },
 ];
 
-function colorFor(id: string) {
+function colorFor(id: string, theme: Theme) {
   let hash = 0;
   for (const char of id) hash = (hash + char.charCodeAt(0)) % COLORS.length;
-  return COLORS[hash];
+  const tone = COLORS[hash];
+  if (theme === 'black') return { bg: tone.nightBg, border: tone.border, text: tone.nightText };
+  return tone;
 }
 
 function interviewStepLabel(step: number) {
@@ -193,6 +196,7 @@ function heading(view: View, cursor: Date) {
 
 export function MeetingCalendar() {
   const router = useRouter();
+  const theme = useTheme();
   const gridRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View>('week');
   const [cursor, setCursor] = useState(() => new Date());
@@ -302,6 +306,7 @@ export function MeetingCalendar() {
         <MonthView
           cursor={cursor}
           meetings={placed}
+          theme={theme}
           onOpenDay={(day) => {
             setCursor(day);
             setView('day');
@@ -311,6 +316,7 @@ export function MeetingCalendar() {
       ) : (
         <TimeGrid
           gridRef={gridRef}
+          theme={theme}
           days={days}
           meetings={placed}
           onOpenMenu={openMenu}
@@ -405,12 +411,14 @@ function TimeGrid({
   gridRef,
   days,
   meetings,
+  theme,
   onOpenMenu,
   onCreateRange,
 }: {
   gridRef: React.RefObject<HTMLDivElement>;
   days: Date[];
   meetings: PlacedMeeting[];
+  theme: Theme;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
   onCreateRange: (start: Date, end: Date) => void;
 }) {
@@ -608,7 +616,7 @@ function TimeGrid({
               ))}
               {timed.map((item) => {
                 const style = blockStyle(item.start, item.end);
-                const tone = colorFor(item.meeting.jobId);
+                const tone = colorFor(item.meeting.jobId, theme);
                 return (
                   <button
                     key={item.meeting.interview._id}
@@ -626,8 +634,8 @@ function TimeGrid({
                     }}
                     onClick={(event) => onOpenMenu(item.meeting, event)}
                   >
-                    <span className="block truncate font-medium">{formatTime(item.start)} {item.meeting.jobTitle}</span>
-                    <span className="block truncate opacity-80">{item.meeting.interview.interviewers[0]?.name || item.meeting.companyName}</span>
+                    <span className="block truncate font-medium">{formatTime(item.start)} {interviewStepLabel(item.meeting.step || 1)}</span>
+                    <span className="block truncate opacity-80">{item.meeting.jobTitle}</span>
                   </button>
                 );
               })}
@@ -740,11 +748,13 @@ function monthGrid(cursor: Date) {
 function MonthView({
   cursor,
   meetings,
+  theme,
   onOpenDay,
   onOpenMenu,
 }: {
   cursor: Date;
   meetings: PlacedMeeting[];
+  theme: Theme;
   onOpenDay: (day: Date) => void;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
 }) {
@@ -789,7 +799,7 @@ function MonthView({
             </div>
             <div className="mt-0.5 min-h-0 flex-1 space-y-0.5 overflow-hidden px-1 pb-1">
               {visible.map((item) => (
-                <EventChip key={item.meeting.interview._id} item={item} onOpenMenu={onOpenMenu} pill />
+                <EventChip key={item.meeting.interview._id} item={item} theme={theme} onOpenMenu={onOpenMenu} pill />
               ))}
               {hidden > 0 ? (
                 <button type="button" className="px-1 text-[11px] text-slate-500 hover:underline" onClick={() => onOpenDay(day)}>
@@ -806,14 +816,16 @@ function MonthView({
 
 function EventChip({
   item,
+  theme,
   onOpenMenu,
   pill = false,
 }: {
   item: PlacedMeeting;
+  theme: Theme;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
   pill?: boolean;
 }) {
-  const tone = colorFor(item.meeting.jobId);
+  const tone = colorFor(item.meeting.jobId, theme);
   return (
     <button
       type="button"
@@ -825,7 +837,9 @@ function EventChip({
       style={{ background: tone.bg, borderLeftColor: tone.border, color: tone.text }}
       onClick={(event) => onOpenMenu(item.meeting, event)}
     >
-      {item.allDay ? item.meeting.jobTitle : `${formatTime(item.start)} ${item.meeting.jobTitle}`}
+      {item.allDay
+        ? `${interviewStepLabel(item.meeting.step || 1)} · ${item.meeting.jobTitle}`
+        : `${formatTime(item.start)} ${interviewStepLabel(item.meeting.step || 1)} · ${item.meeting.jobTitle}`}
     </button>
   );
 }
@@ -884,6 +898,9 @@ function CreateMeetingModal({
   const [conversation, setConversation] = useState('');
   const [feedback, setFeedback] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [creatingJob, setCreatingJob] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newCompany, setNewCompany] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -902,6 +919,9 @@ function CreateMeetingModal({
     }
     setQuery('');
     setJobId('');
+    setCreatingJob(false);
+    setNewTitle('');
+    setNewCompany('');
     setInterviewer('');
     setConversation('');
     setFeedback('');
@@ -920,8 +940,12 @@ function CreateMeetingModal({
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
-    if (!jobId) {
-      setError('Choose a job.');
+    if (!creatingJob && !jobId) {
+      setError('Choose a job, or add a new one.');
+      return;
+    }
+    if (creatingJob && (!newTitle.trim() || !newCompany.trim())) {
+      setError('Enter the job title and company.');
       return;
     }
     const start = new Date(startsAt);
@@ -937,8 +961,23 @@ function CreateMeetingModal({
     const history = conversation.trim() ? [{ speaker: '', message: conversation.trim() }] : [];
     setSaving(true);
     setError('');
+    let targetId = jobId;
+    let jobWasCreated = false;
     try {
-      const created = await api.createMeeting(jobId, {
+      if (creatingJob) {
+        const response = await api.createJob({
+          title: newTitle.trim(),
+          companyName: newCompany.trim(),
+          status: 'Interviewing',
+        });
+        jobWasCreated = true;
+        targetId = response.job._id;
+        setJobs((current) => [response.job, ...current.filter((job) => job._id !== response.job._id)]);
+        setJobId(targetId);
+        setCreatingJob(false);
+        setQuery(`${response.job.title} — ${response.job.companyName}`);
+      }
+      const created = await api.createMeeting(targetId, {
         startsAt: start.toISOString(),
         endsAt: end.toISOString(),
         date: localDateValue(start),
@@ -948,7 +987,7 @@ function CreateMeetingModal({
       });
       if (file) {
         try {
-          await api.uploadInterviewAttachment(jobId, created.interviewId, file);
+          await api.uploadInterviewAttachment(targetId, created.interviewId, file);
         } catch (uploadError) {
           const warning = uploadError instanceof Error
             ? `Saved the meeting, but the file was not attached. ${uploadError.message}`
@@ -959,7 +998,8 @@ function CreateMeetingModal({
       }
       await onCreated(start);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not save the meeting');
+      const message = saveError instanceof Error ? saveError.message : 'Could not save the meeting';
+      setError(jobWasCreated ? `Added the job, but the meeting was not saved. ${message}` : message);
     } finally {
       setSaving(false);
     }
@@ -999,6 +1039,30 @@ function CreateMeetingModal({
           <label className="block text-sm text-slate-600" htmlFor="meeting-job">
             Job
           </label>
+          {creatingJob ? (
+            <div className="mt-1 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+              <label className="block text-sm text-slate-600">
+                Job title
+                <input id="meeting-job" className="input mt-1" value={newTitle} onChange={(event) => setNewTitle(event.target.value)} required />
+              </label>
+              <label className="block text-sm text-slate-600">
+                Company
+                <input className="input mt-1" value={newCompany} onChange={(event) => setNewCompany(event.target.value)} required />
+              </label>
+              <button
+                type="button"
+                className="text-sm text-brand-700 hover:underline"
+                onClick={() => {
+                  setCreatingJob(false);
+                  setJobId('');
+                  setQuery('');
+                  setOpenList(true);
+                }}
+              >
+                Choose an existing job
+              </button>
+            </div>
+          ) : (
           <input
             id="meeting-job"
             className="input mt-1"
@@ -1015,8 +1079,23 @@ function CreateMeetingModal({
             }}
             autoComplete="off"
           />
-          {openList ? (
+          )}
+          {openList && !creatingJob ? (
             <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow">
+              <li>
+                <button
+                  type="button"
+                  className="block w-full px-3 py-2 text-left text-sm font-medium text-brand-700 hover:bg-slate-50"
+                  onClick={() => {
+                    setCreatingJob(true);
+                    setJobId('');
+                    setNewTitle(query.trim());
+                    setOpenList(false);
+                  }}
+                >
+                  Add a new job
+                </button>
+              </li>
               {matches.length === 0 ? <li className="px-3 py-2 text-sm text-slate-400">No active jobs match.</li> : null}
               {matches.map((job) => (
                 <li key={job._id}>
@@ -1069,8 +1148,23 @@ function MeetingDetailsModal({ meeting, onClose }: { meeting: CalendarMeeting | 
     <Modal open title={meeting.jobTitle} onClose={onClose} width="lg">
       <div className="space-y-3 text-sm text-slate-700">
         <p>{meeting.companyName}</p>
+        <p className="font-medium text-slate-800">
+          {interviewStepLabel(meeting.step || 1)}
+          {interview.type ? ` · ${interview.type}` : ''}
+        </p>
         <p>{when}</p>
         <p>Interviewer: {interview.interviewers.map((person) => person.name).join(', ') || 'Not recorded'}</p>
+        {(meeting.lineup?.length ?? 0) > 1 ? (
+          <ul className="space-y-1 rounded-md border border-slate-200 px-3 py-2">
+            {meeting.lineup.map((item) => (
+              <li key={item.id} className={item.step === meeting.step ? 'font-medium text-slate-800' : 'text-slate-500'}>
+                {interviewStepLabel(item.step)}
+                {item.type ? ` · ${item.type}` : ''}
+                {item.interviewer ? ` · ${item.interviewer}` : ''}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <div>
           <h3 className="font-medium text-slate-800">Conversation</h3>
           {interview.conversation.length === 0 ? <p className="text-slate-400">None</p> : (

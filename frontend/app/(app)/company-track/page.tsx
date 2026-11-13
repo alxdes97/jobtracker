@@ -51,7 +51,7 @@ function CompanyLogo({ name, domain }: { name: string; domain: string }) {
       alt=""
       width={32}
       height={32}
-      className="h-8 w-8 shrink-0 rounded-md bg-white object-contain"
+      className="keep-white h-8 w-8 shrink-0 rounded-md bg-white object-contain"
       onError={() => setFailed(true)}
     />
   );

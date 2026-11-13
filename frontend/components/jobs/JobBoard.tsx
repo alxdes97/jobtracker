@@ -19,6 +19,16 @@ interface JobBoardProps {
   onAdd: (status: JobStatus) => void;
 }
 
+function ordinalInterview(index: number) {
+  const n = index + 1;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  if (n % 10 === 1) return `${n}st`;
+  if (n % 10 === 2) return `${n}nd`;
+  if (n % 10 === 3) return `${n}rd`;
+  return `${n}th`;
+}
+
 const SORT_LABELS: Record<Exclude<ColumnSort, 'manual'>, string> = {
   title: 'Sort by title',
   company: 'Sort by company',
@@ -31,12 +41,10 @@ const TITLE_BAR_STEPS: JobStatus[] = [...PIPELINE_STATUSES, 'Closed'];
 function titleBarStyle(status: JobStatus) {
   const index = Math.max(0, TITLE_BAR_STEPS.indexOf(status));
   const progress = index / (TITLE_BAR_STEPS.length - 1);
-  const red = Math.round(255 - 35 * progress);
-  const green = Math.round(255 - 202 * progress);
-  const blue = Math.round(255 - 186 * progress);
+  const mix = Math.round(progress * 100);
   return {
-    backgroundColor: `rgb(${red}, ${green}, ${blue})`,
-    color: progress >= 0.7 ? '#ffffff' : '#0f172a',
+    backgroundColor: `color-mix(in srgb, rgb(var(--bar-from)) ${100 - mix}%, rgb(220, 53, 69) ${mix}%)`,
+    color: progress >= 0.7 ? '#ffffff' : 'var(--bar-ink)',
   };
 }
 
@@ -252,6 +260,17 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
                         {job.companyName}
                         {job.location ? ` · ${job.location}` : ''}
                       </p>
+                      {(job.interviews?.length ?? 0) > 0 ? (
+                        <ul className="mt-1 space-y-0.5 px-3 text-[11px] text-slate-600">
+                          {job.interviews.map((interview, interviewIndex) => (
+                            <li key={interview._id} className="truncate">
+                              {ordinalInterview(interviewIndex)} Interview
+                              {interview.type ? ` · ${interview.type}` : ''}
+                              {interview.date ? ` · ${formatDate(interview.date)}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </Link>
                     <div className="mt-2 flex items-center justify-between px-3 pb-3">
                       <StarRating value={job.excitement} />

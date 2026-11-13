@@ -138,12 +138,23 @@ export interface JobContact {
   linkedin?: string;
 }
 
+export interface MeetingLineupItem {
+  id: string;
+  step: number;
+  type: string;
+  date: string | null;
+  startsAt?: string | null;
+  interviewer: string;
+}
+
 export interface CalendarMeeting {
   jobId: string;
   jobTitle: string;
   companyName: string;
   status: JobStatus;
   step: number;
+  interviewCount: number;
+  lineup: MeetingLineupItem[];
   interview: Interview;
 }
 

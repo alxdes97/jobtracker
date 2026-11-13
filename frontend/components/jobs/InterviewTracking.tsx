@@ -192,6 +192,7 @@ export function InterviewTracking({
                     }
                   >
                     {ordinal(index)} Interview
+                    {interview.type ? <span className="mt-0.5 block text-xs font-normal text-slate-500">{interview.type}</span> : null}
                   </button>
                 </li>
               );

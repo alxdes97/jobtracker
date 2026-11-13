@@ -57,3 +57,106 @@
   background-color: #cbd5e1;
   border-radius: 9999px;
 }
+
+:root {
+  --bar-from: 255 255 255;
+  --bar-ink: #0f172a;
+}
+
+/* Black mode remaps surfaces and text. Brand buttons keep their white label. */
+html[data-theme='black'] {
+  color-scheme: dark;
+  --bar-from: 18 18 18;
+  --bar-ink: #f5f5f5;
+}
+
+html[data-theme='black'] body {
+  background-color: #000;
+  color: #f5f5f5;
+}
+
+html[data-theme='black'] .bg-white { background-color: #111; }
+html[data-theme='black'] .bg-slate-50 { background-color: #000; }
+html[data-theme='black'] .bg-slate-50\/70 { background-color: rgb(0 0 0 / 0.7); }
+html[data-theme='black'] .bg-slate-100 { background-color: #1a1a1a; }
+html[data-theme='black'] .bg-slate-200 { background-color: #262626; }
+html[data-theme='black'] .bg-slate-700 { background-color: #f5f5f5; color: #000; }
+html[data-theme='black'] .bg-brand-50,
+html[data-theme='black'] .bg-brand-50\/40 { background-color: #123f38; }
+html[data-theme='black'] .bg-brand-200 { background-color: #154c42; }
+html[data-theme='black'] .bg-amber-50 { background-color: #2a2108; }
+html[data-theme='black'] .bg-red-50 { background-color: #2a1010; }
+html[data-theme='black'] .keep-white { background-color: #fff; }
+
+html[data-theme='black'] .hover\:bg-white:hover { background-color: #1c1c1c; }
+html[data-theme='black'] .hover\:bg-slate-50:hover { background-color: #1a1a1a; }
+html[data-theme='black'] .hover\:bg-slate-100:hover { background-color: #242424; }
+html[data-theme='black'] .hover\:bg-amber-50:hover { background-color: #3a2e0c; }
+html[data-theme='black'] .hover\:bg-red-50:hover { background-color: #3d1515; }
+
+html[data-theme='black'] .border-slate-100 { border-color: #1f1f1f; }
+html[data-theme='black'] .border-slate-200 { border-color: #2a2a2a; }
+html[data-theme='black'] .border-slate-300 { border-color: #3a3a3a; }
+html[data-theme='black'] .border-red-200 { border-color: #7f1d1d; }
+html[data-theme='black'] .border-black\/10 { border-color: rgb(255 255 255 / 0.12); }
+html[data-theme='black'] .hover\:border-slate-200:hover { border-color: #3a3a3a; }
+
+html[data-theme='black'] .text-slate-300 { color: #6b6b6b; }
+html[data-theme='black'] .text-slate-400 { color: #9a9a9a; }
+html[data-theme='black'] .text-slate-500 { color: #b0b0b0; }
+html[data-theme='black'] .text-slate-600 { color: #d0d0d0; }
+html[data-theme='black'] .text-slate-700 { color: #e4e4e4; }
+html[data-theme='black'] .text-slate-800,
+html[data-theme='black'] .text-slate-900 { color: #f5f5f5; }
+html[data-theme='black'] .placeholder\:text-slate-400::placeholder { color: #8a8a8a; }
+html[data-theme='black'] .hover\:text-slate-600:hover { color: #eee; }
+html[data-theme='black'] .hover\:text-slate-800:hover { color: #fff; }
+
+html[data-theme='black'] .text-brand-500 { color: #49b294; }
+html[data-theme='black'] .text-brand-700,
+html[data-theme='black'] .hover\:text-brand-700:hover { color: #7ccfb3; }
+html[data-theme='black'] .text-brand-800,
+html[data-theme='black'] .hover\:text-brand-800:hover { color: #ade4cf; }
+html[data-theme='black'] .text-brand-900 { color: #d5f2e6; }
+html[data-theme='black'] .text-amber-700,
+html[data-theme='black'] .hover\:text-amber-800:hover { color: #fbbf24; }
+html[data-theme='black'] .text-red-600,
+html[data-theme='black'] .hover\:text-red-600:hover { color: #f87171; }
+html[data-theme='black'] .text-red-700 { color: #fca5a5; }
+
+html[data-theme='black'] .btn-secondary {
+  border-color: #3a3a3a;
+  background-color: #111;
+  color: #e4e4e4;
+}
+html[data-theme='black'] .btn-secondary:hover { background-color: #1c1c1c; }
+html[data-theme='black'] .btn-ghost { color: #d0d0d0; }
+html[data-theme='black'] .btn-ghost:hover { background-color: #1a1a1a; }
+html[data-theme='black'] .input {
+  border-color: #3a3a3a;
+  background-color: #000;
+  color: #f5f5f5;
+}
+html[data-theme='black'] .input::placeholder { color: #8a8a8a; }
+html[data-theme='black'] .input:focus {
+  border-color: #49b294;
+  --tw-ring-color: rgb(39 148 122 / 0.35);
+}
+html[data-theme='black'] .label { color: #e4e4e4; }
+html[data-theme='black'] .card {
+  border-color: #2a2a2a;
+  background-color: #111;
+}
+html[data-theme='black'] .chip {
+  border-color: #154c42;
+  background-color: #123f38;
+  color: #ade4cf;
+}
+html[data-theme='black'] input:-webkit-autofill {
+  -webkit-text-fill-color: #f5f5f5;
+  caret-color: #f5f5f5;
+  box-shadow: 0 0 0 1000px #000 inset;
+}
+
+html[data-theme='black'] * { scrollbar-color: #3a3a3a transparent; }
+html[data-theme='black'] *::-webkit-scrollbar-thumb { background-color: #3a3a3a; }

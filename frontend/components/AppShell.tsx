@@ -15,6 +15,7 @@ import {
   UsersIcon,
 } from './Icons';
 import { classNames } from '@/lib/format';
+import { ThemeToggle } from './ThemeToggle';
 
 const DASHBOARD_PAGES = [
   { href: '/jobs', label: 'Jobs', icon: BriefcaseIcon },
@@ -138,7 +139,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {SIDEBAR.find((item) => item.active(pathname))?.label ?? 'Job Tracker'}
             </span>
           )}
-          <span className="hidden text-sm text-slate-500 sm:block">{user.name}</span>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <span className="hidden text-sm text-slate-500 sm:block">{user.name}</span>
+          </div>
         </header>
 
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>

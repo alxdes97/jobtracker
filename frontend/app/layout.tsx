@@ -12,8 +12,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('job-tracker-theme')==='black')document.documentElement.dataset.theme='black';}catch(e){}",
+          }}
+        />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

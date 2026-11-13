@@ -103,6 +103,29 @@ function guidanceFor(status) {
 
 const BEFORE_INTERVIEWING = new Set(['Bookmarked', 'Applying', 'Applied']);
 
+/** The first interviews follow the usual hiring order. Later ones stay Other until the user picks a type. */
+const INTERVIEW_KINDS = ['Recruiter', 'Hiring Manager', 'Technical', 'Final'];
+
+function interviewKind(index) {
+  return INTERVIEW_KINDS[index] || 'Other';
+}
+
+/** Fill in kinds for interviews that were booked from the calendar and never given a type. */
+function applyInterviewKinds(job) {
+  const interviews = job.interviews || [];
+  const untouched = interviews.every((interview) => !interview.type || interview.type === 'Other');
+  if (!untouched) return false;
+  let changed = false;
+  interviews.forEach((interview, index) => {
+    const kind = interviewKind(index);
+    if (interview.type !== kind) {
+      interview.type = kind;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
 /** An interview means the job has reached Interviewing, unless it is already further along. */
 async function advanceToInterviewing(job) {
   if (job.archived || !BEFORE_INTERVIEWING.has(job.status) || !job.interviews?.length) return false;
@@ -159,11 +182,10 @@ function withDerived(jobDoc) {
 }
 
 export const listMeetings = asyncHandler(async (req, res) => {
-  const jobs = await Job.find({ user: req.user._id, archived: false }).select(
-    'title companyName status interviews',
-  );
+  const jobs = await Job.find({ user: req.user._id, archived: false });
   const meetings = [];
   for (const job of jobs) {
+    if (applyInterviewKinds(job)) await job.save();
     const interviews = job.interviews || [];
     for (let index = 0; index < interviews.length; index += 1) {
       const interview = interviews[index];
@@ -174,6 +196,18 @@ export const listMeetings = asyncHandler(async (req, res) => {
         companyName: job.companyName,
         status: job.status,
         step: index + 1,
+        interviewCount: interviews.length,
+        lineup: interviews.map((item, itemIndex) => ({
+          id: item._id,
+          step: itemIndex + 1,
+          type: item.type || '',
+          date: item.date,
+          startsAt: item.startsAt,
+          interviewer: (item.interviewers || [])
+            .map((person) => person.name)
+            .filter(Boolean)
+            .join(', '),
+        })),
         interview: interview.toJSON(),
       });
     }
@@ -212,7 +246,7 @@ export const createMeeting = asyncHandler(async (req, res) => {
     date: req.body.date ? parseCalendarDate(req.body.date, 'Meeting date') : startsAt,
     startsAt,
     endsAt,
-    type: 'Other',
+    type: interviewKind(job.interviews.length),
     interviewers: [{ name: interviewer.slice(0, 120), title: '' }],
     conversation,
     feedback: feedback ? [{ body: feedback }] : [],
@@ -244,7 +278,10 @@ export const listJobs = asyncHandler(async (req, res) => {
   };
 
   const jobs = await Job.find(filter).sort(sortMap[sort] || sortMap.order);
-  for (const job of jobs) await advanceToInterviewing(job);
+  for (const job of jobs) {
+    await advanceToInterviewing(job);
+    if (applyInterviewKinds(job)) await job.save();
+  }
   res.json({ jobs: jobs.map((job) => withDerived(job)) });
 });
 
@@ -265,6 +302,7 @@ export const getJob = asyncHandler(async (req, res) => {
   );
   if (!job) throw ApiError.notFound('Job not found');
   await advanceToInterviewing(job);
+  if (applyInterviewKinds(job)) await job.save();
   res.json({ job: withDerived(job) });
 });
 
@@ -557,7 +595,7 @@ export const addInterview = asyncHandler(async (req, res) => {
   const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
   if (!job) throw ApiError.notFound('Job not found');
 
-  job.interviews.push({});
+  job.interviews.push({ type: interviewKind(job.interviews.length) });
   if (!(await advanceToInterviewing(job))) await job.save();
   const interview = job.interviews[job.interviews.length - 1];
   res.status(201).json({ job: withDerived(job), interviewId: interview._id });

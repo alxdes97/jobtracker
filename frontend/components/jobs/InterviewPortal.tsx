@@ -25,19 +25,16 @@ function ordinal(index: number) {
 /** Later interview steps push the title bar from white toward red. */
 function titleBarStyle(stepIndex: number, stepCount: number) {
   const progress = stepCount <= 1 ? 0 : stepIndex / (stepCount - 1);
-  const red = Math.round(255 - 35 * progress);
-  const green = Math.round(255 - 202 * progress);
-  const blue = Math.round(255 - 186 * progress);
+  const mix = Math.round(progress * 100);
   return {
-    backgroundColor: `rgb(${red}, ${green}, ${blue})`,
-    color: progress >= 0.7 ? '#ffffff' : '#0f172a',
+    backgroundColor: `color-mix(in srgb, rgb(var(--bar-from)) ${100 - mix}%, rgb(220, 53, 69) ${mix}%)`,
+    color: progress >= 0.7 ? '#ffffff' : 'var(--bar-ink)',
   };
 }
 
-function interviewSummary(interview: Interview) {
-  const parts = [formatDate(interview.date), interview.type, interview.format].filter(Boolean);
+function interviewLine(interview: Interview) {
   const people = interview.interviewers.map((person) => person.name).filter(Boolean);
-  return { parts, people };
+  return [formatDate(interview.date), interview.type, interview.format, people.join(', ')].filter(Boolean).join(' · ');
 }
 
 export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
@@ -89,13 +86,12 @@ export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
                   <p className="py-8 text-center text-xs text-slate-400">No interviews</p>
                 ) : (
                   cards.map(({ job, interview }) => {
-                    const summary = interviewSummary(interview);
                     return (
                       <article
                         key={interview._id}
                         className="overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm"
                       >
-                        <Link href={`/jobs/${job._id}`} className="block">
+                        <Link href={`/jobs/${job._id}?interview=${interview._id}`} className="block">
                           <div
                             className="border-b border-black/10 px-3 py-2"
                             style={titleBarStyle(index, stepCount)}
@@ -113,8 +109,23 @@ export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
                             {job.companyName}
                             {job.location ? ` · ${job.location}` : ''}
                           </p>
-                          <p>{summary.parts.length > 0 ? summary.parts.join(' · ') : 'Details not set'}</p>
-                          {summary.people.length > 0 ? <p>{summary.people.join(', ')}</p> : null}
+                          <ul className="space-y-1">
+                            {(job.interviews ?? []).map((item, itemIndex) => {
+                              const current = item._id === interview._id;
+                              const detail = interviewLine(item);
+                              return (
+                                <li key={item._id}>
+                                  <Link
+                                    href={`/jobs/${job._id}?interview=${item._id}`}
+                                    className={current ? 'font-medium text-slate-800 hover:underline' : 'text-slate-500 hover:underline'}
+                                  >
+                                    {ordinal(itemIndex)} Interview
+                                  </Link>
+                                  {detail ? <span className="block text-slate-500">{detail}</span> : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
                         </div>
                       </article>
                     );
