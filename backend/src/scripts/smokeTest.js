@@ -343,6 +343,17 @@ check('tracks interviews, interviewers and a practice session', async () => {
   );
   assert.equal(conversation.status, 201);
   assert.equal(interviewOf(conversation.payload).conversation[0].message, 'Walk me through a recent project.');
+  const entryId = interviewOf(conversation.payload).conversation[0]._id;
+  const edited = await call(
+    'PATCH',
+    `/api/jobs/${jobId}/interviews/${interviewId}/conversation/${entryId}`,
+    { message: 'Walk me through a recent project, including the tradeoffs.' },
+  );
+  assert.equal(edited.status, 200);
+  assert.equal(
+    interviewOf(edited.payload).conversation[0].message,
+    'Walk me through a recent project, including the tradeoffs.',
+  );
 
   const feedback = await call('POST', `/api/jobs/${jobId}/interviews/${interviewId}/feedback`, {
     body: 'Strong on system design, light on metrics.',

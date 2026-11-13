@@ -381,21 +381,21 @@ export function MeetingCalendar() {
           <button
             type="button"
             className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-            onClick={() =>
-              router.push(`/jobs/${menu.meeting.jobId}?interview=${menu.meeting.interview._id}`)
-            }
-          >
-            Open on the job
-          </button>
-          <button
-            type="button"
-            className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
             onClick={() => {
               setDetails(menu.meeting);
               setMenu(null);
             }}
           >
-            View meeting
+            Meeting details
+          </button>
+          <button
+            type="button"
+            className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+            onClick={() =>
+              router.push(`/jobs/${menu.meeting.jobId}?interview=${menu.meeting.interview._id}`)
+            }
+          >
+            Job details
           </button>
         </div>
       ) : null}
@@ -876,10 +876,9 @@ function TimeGrid({
                 const style = blockStyle(item.start, item.end);
                 const tone = colorFor(item.meeting.jobId, theme);
                 return (
-                  <button
+                  <div
                     key={item.meeting.interview._id}
-                    type="button"
-                    className="absolute cursor-grab touch-none overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left text-[12px] leading-snug"
+                    className="absolute cursor-grab touch-none overflow-hidden rounded-md border-l-[3px] py-1 pl-1.5 pr-5 text-left text-[12px] leading-snug"
                     title={interviewStepLabel(item.meeting.step || 1)}
                     style={{
                       top: style.top,
@@ -900,7 +899,21 @@ function TimeGrid({
                   >
                     <span className="block truncate font-medium">{formatTime(item.start)} {interviewStepLabel(item.meeting.step || 1)}</span>
                     <span className="block truncate opacity-80">{item.meeting.jobTitle}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="absolute right-0.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-[10px] leading-none hover:bg-black/10"
+                      aria-label="Meeting options"
+                      title="Meeting options"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        onOpenAt(item.meeting, rect.left, rect.bottom);
+                      }}
+                    >
+                      ▾
+                    </button>
+                  </div>
                 );
               })}
               {move?.moved && move.day && move.startMin != null && sameDay(move.day, day) ? (
@@ -1240,6 +1253,7 @@ function MonthView({
                     event.preventDefault();
                     beginMonthMove(event, item);
                   }}
+                  onOpenAt={onOpenAt}
                 />
               ))}
               {hidden > 0 ? (
@@ -1280,6 +1294,7 @@ function EventChip({
   item,
   theme,
   onOpenMenu,
+  onOpenAt,
   onPointerDown,
   dragging = false,
   pill = false,
@@ -1287,17 +1302,17 @@ function EventChip({
   item: PlacedMeeting;
   theme: Theme;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
-  onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onOpenAt?: (meeting: CalendarMeeting, x: number, y: number) => void;
+  onPointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
   dragging?: boolean;
   pill?: boolean;
 }) {
   const tone = colorFor(item.meeting.jobId, theme);
   return (
-    <button
-      type="button"
+    <div
       className={classNames(
-        'block w-full truncate border-l-[3px] text-left text-[12px] leading-4',
-        pill ? 'rounded px-1.5 py-0.5' : 'rounded px-1',
+        'relative block w-full truncate border-l-[3px] pr-4 text-left text-[12px] leading-4',
+        pill ? 'rounded py-0.5 pl-1.5' : 'rounded px-1',
         onPointerDown && !item.allDay && 'cursor-grab touch-none',
       )}
       title={interviewStepLabel(item.meeting.step || 1)}
@@ -1308,13 +1323,29 @@ function EventChip({
           event.stopPropagation();
           return;
         }
-        onOpenMenu(item.meeting, event);
+        onOpenMenu(item.meeting, event as unknown as React.MouseEvent);
       }}
     >
       {item.allDay
         ? `${interviewStepLabel(item.meeting.step || 1)} · ${item.meeting.jobTitle}`
         : `${formatTime(item.start)} ${interviewStepLabel(item.meeting.step || 1)} · ${item.meeting.jobTitle}`}
-    </button>
+      {onOpenAt ? (
+        <button
+          type="button"
+          className="absolute right-0.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-[10px] leading-none hover:bg-black/10"
+          aria-label="Meeting options"
+          title="Meeting options"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            const rect = event.currentTarget.getBoundingClientRect();
+            onOpenAt(item.meeting, rect.left, rect.bottom);
+          }}
+        >
+          ▾
+        </button>
+      ) : null}
+    </div>
   );
 }
 

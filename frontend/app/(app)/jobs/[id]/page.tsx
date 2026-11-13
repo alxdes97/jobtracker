@@ -291,6 +291,9 @@ export default function JobDetailPage() {
             onAddConversation={async (interviewId, data) =>
               setJob((await api.addConversation(id, interviewId, data)).job)
             }
+            onUpdateConversation={async (interviewId, entryId, message) =>
+              setJob((await api.updateConversation(id, interviewId, entryId, message)).job)
+            }
             onDeleteConversation={async (interviewId, entryId) =>
               setJob((await api.deleteConversation(id, interviewId, entryId)).job)
             }

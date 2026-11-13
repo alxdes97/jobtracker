@@ -76,6 +76,10 @@ router.delete(
   jobs.deleteInterviewer,
 );
 router.post('/jobs/:id/interviews/:interviewId/conversation', jobs.addConversationEntry);
+router.patch(
+  '/jobs/:id/interviews/:interviewId/conversation/:entryId',
+  jobs.updateConversationEntry,
+);
 router.delete(
   '/jobs/:id/interviews/:interviewId/conversation/:entryId',
   jobs.deleteConversationEntry,

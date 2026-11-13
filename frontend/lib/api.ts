@@ -175,6 +175,11 @@ export const api = {
       method: 'POST',
       body: body(data),
     }),
+  updateConversation: (id: string, interviewId: string, entryId: string, message: string) =>
+    request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/conversation/${entryId}`, {
+      method: 'PATCH',
+      body: body({ message }),
+    }),
   deleteConversation: (id: string, interviewId: string, entryId: string) =>
     request<{ job: Job }>(`/jobs/${id}/interviews/${interviewId}/conversation/${entryId}`, {
       method: 'DELETE',

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { DownloadIcon, PlusIcon, TrashIcon } from '@/components/Icons';
+import { CopyIcon, DownloadIcon, PencilIcon, PlusIcon, TrashIcon } from '@/components/Icons';
 import { downloadInterviewAttachment } from '@/lib/api';
 import { formatDate, toDateInput } from '@/lib/format';
 import { INTERVIEW_FORMATS, INTERVIEW_TYPES, type Interview } from '@/lib/types';
@@ -16,6 +16,7 @@ interface InterviewTrackingProps {
   onAddInterviewer: (interviewId: string, data: { name: string; title?: string }) => Promise<void>;
   onDeleteInterviewer: (interviewId: string, interviewerId: string) => Promise<void>;
   onAddConversation: (interviewId: string, data: { speaker: string; message: string }) => Promise<void>;
+  onUpdateConversation: (interviewId: string, entryId: string, message: string) => Promise<void>;
   onDeleteConversation: (interviewId: string, entryId: string) => Promise<void>;
   onAddFeedback: (interviewId: string, body: string) => Promise<void>;
   onDeleteFeedback: (interviewId: string, feedbackId: string) => Promise<void>;
@@ -44,6 +45,7 @@ export function InterviewTracking({
   onAddInterviewer,
   onDeleteInterviewer,
   onAddConversation,
+  onUpdateConversation,
   onDeleteConversation,
   onAddFeedback,
   onDeleteFeedback,
@@ -59,6 +61,9 @@ export function InterviewTracking({
   const [conversationOpen, setConversationOpen] = useState(false);
   const [speaker, setSpeaker] = useState('Me');
   const [message, setMessage] = useState('');
+  const [editingEntryId, setEditingEntryId] = useState('');
+  const [editingMessage, setEditingMessage] = useState('');
+  const [copied, setCopied] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackBody, setFeedbackBody] = useState('');
   const [practiceOpen, setPracticeOpen] = useState(false);
@@ -116,6 +121,37 @@ export function InterviewTracking({
     } finally {
       setBusy(false);
     }
+  }
+
+  function startEditConversation(entryId: string, current: string) {
+    setEditingEntryId(entryId);
+    setEditingMessage(current);
+  }
+
+  async function saveConversationEdit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selected || !editingEntryId || !editingMessage.trim()) return;
+    setBusy(true);
+    try {
+      await onUpdateConversation(selected._id, editingEntryId, editingMessage.trim());
+      setEditingEntryId('');
+      setEditingMessage('');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyConversation() {
+    if (!selected) return;
+    const text = (selected.conversation ?? [])
+      .map((entry) => {
+        const label = [entry.speaker, entry.createdAt ? formatDate(entry.createdAt) : ''].filter(Boolean).join(' · ');
+        return label ? `${label}\n${entry.message}` : entry.message;
+      })
+      .join('\n\n');
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   }
 
   async function handleAddFeedback(event: React.FormEvent) {
@@ -358,22 +394,67 @@ export function InterviewTracking({
                         key={entry._id}
                         className="flex items-start justify-between gap-2 rounded border border-slate-200 px-3 py-2 text-sm"
                       >
-                        <div>
+                        <div className="min-w-0 flex-1">
                           {entry.speaker || entry.createdAt ? (
                             <p className="text-xs text-slate-400">
                               {[entry.speaker, entry.createdAt ? formatDate(entry.createdAt) : ''].filter(Boolean).join(' · ')}
                             </p>
                           ) : null}
-                          <p className="mt-0.5 whitespace-pre-wrap text-slate-700">{entry.message}</p>
+                          {editingEntryId === entry._id ? (
+                            <form onSubmit={saveConversationEdit} className="mt-1 space-y-2">
+                              <textarea
+                                className="input max-h-80 min-h-32 resize-y overflow-y-auto whitespace-pre-wrap"
+                                value={editingMessage}
+                                onChange={(event) => setEditingMessage(event.target.value)}
+                                required
+                              />
+                              <div className="flex gap-2">
+                                <button type="submit" className="btn-primary" disabled={busy || !editingMessage.trim()}>
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary"
+                                  onClick={() => {
+                                    setEditingEntryId('');
+                                    setEditingMessage('');
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <p className="mt-0.5 max-h-80 overflow-y-auto whitespace-pre-wrap text-slate-700">{entry.message}</p>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          className="text-slate-400 hover:text-red-600"
-                          aria-label="Remove conversation entry"
-                          onClick={() => onDeleteConversation(selected._id, entry._id)}
-                        >
-                          <TrashIcon />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            className="text-slate-400 hover:text-slate-700"
+                            aria-label="Edit conversation"
+                            onClick={() => startEditConversation(entry._id, entry.message)}
+                          >
+                            <PencilIcon />
+                          </button>
+                          <button
+                            type="button"
+                            className="text-slate-400 hover:text-slate-700"
+                            aria-label="Copy conversation history"
+                            title={copied ? 'Copied' : 'Copy conversation history'}
+                            onClick={() => void copyConversation()}
+                          >
+                            <CopyIcon />
+                          </button>
+                          <button
+                            type="button"
+                            className="text-slate-400 hover:text-red-600"
+                            aria-label="Remove conversation entry"
+                            onClick={() => onDeleteConversation(selected._id, entry._id)}
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -390,7 +471,7 @@ export function InterviewTracking({
                       <option value="Interviewer">Interviewer</option>
                     </select>
                     <textarea
-                      className="input min-h-[80px]"
+                      className="input max-h-80 min-h-32 resize-y overflow-y-auto whitespace-pre-wrap"
                       placeholder="What was said"
                       value={message}
                       onChange={(event) => setMessage(event.target.value)}

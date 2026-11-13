@@ -681,9 +681,17 @@ export const deleteInterviewer = asyncHandler(async (req, res) => {
   res.json({ job: withDerived(job) });
 });
 
-export const addConversationEntry = asyncHandler(async (req, res) => {
-  const message = String(req.body.message || '').trim();
+const CONVERSATION_LIMIT = 500_000;
+
+function conversationMessage(value) {
+  const message = String(value || '').trim();
   if (!message) throw ApiError.badRequest('Conversation message is required');
+  if (message.length > CONVERSATION_LIMIT) throw ApiError.badRequest('Conversation is too long');
+  return message;
+}
+
+export const addConversationEntry = asyncHandler(async (req, res) => {
+  const message = conversationMessage(req.body.message);
 
   const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
   if (!job) throw ApiError.notFound('Job not found');
@@ -698,6 +706,24 @@ export const addConversationEntry = asyncHandler(async (req, res) => {
   });
   await job.save();
   res.status(201).json({ job: withDerived(job) });
+});
+
+export const updateConversationEntry = asyncHandler(async (req, res) => {
+  const message = conversationMessage(req.body.message);
+
+  const job = await Job.findOne({ _id: req.params.id, user: req.user._id });
+  if (!job) throw ApiError.notFound('Job not found');
+
+  const interview = job.interviews.id(req.params.interviewId);
+  if (!interview) throw ApiError.notFound('Interview not found');
+
+  const entry = interview.conversation.id(req.params.entryId);
+  if (!entry) throw ApiError.notFound('Conversation entry not found');
+
+  entry.message = message;
+  if ('speaker' in req.body) entry.speaker = String(req.body.speaker || '').trim().slice(0, 80);
+  await job.save();
+  res.json({ job: withDerived(job) });
 });
 
 export const deleteConversationEntry = asyncHandler(async (req, res) => {
