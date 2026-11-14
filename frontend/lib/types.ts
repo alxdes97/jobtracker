@@ -151,6 +151,7 @@ export interface CalendarMeeting {
   jobId: string;
   jobTitle: string;
   companyName: string;
+  profiles: string[];
   status: JobStatus;
   step: number;
   interviewCount: number;

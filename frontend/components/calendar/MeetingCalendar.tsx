@@ -31,12 +31,26 @@ const COLORS = [
   { bg: '#e0f7fa', border: '#0097a7', text: '#006064', nightBg: '#063238', nightText: '#cbf0f4' },
 ];
 
-function colorFor(id: string, theme: Theme) {
-  let hash = 0;
-  for (const char of id) hash = (hash + char.charCodeAt(0)) % COLORS.length;
-  const tone = COLORS[hash];
+const NEUTRAL = { bg: '#f1f3f4', border: '#5f6368', text: '#3c4043', nightBg: '#202124', nightText: '#e8eaed' };
+
+function profileKey(meeting: CalendarMeeting) {
+  return (meeting.profiles ?? []).map((name) => name.trim()).find(Boolean) || '';
+}
+
+function profilePalette(meetings: CalendarMeeting[]) {
+  const keys = [...new Set(meetings.map(profileKey).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return new Map(keys.map((key, index) => [key, index]));
+}
+
+function colorFor(meeting: CalendarMeeting, theme: Theme, palette: Map<string, number>) {
+  const key = profileKey(meeting);
+  const tone = key ? COLORS[(palette.get(key) ?? 0) % COLORS.length] : NEUTRAL;
   if (theme === 'black') return { bg: tone.nightBg, border: tone.border, text: tone.nightText };
   return tone;
+}
+
+function companyLabel(meeting: CalendarMeeting) {
+  return meeting.companyName.trim() || meeting.jobTitle;
 }
 
 function interviewStepLabel(step: number) {
@@ -212,6 +226,7 @@ export function MeetingCalendar() {
     () => meetings.map(placeMeeting).filter((item): item is PlacedMeeting => Boolean(item)),
     [meetings],
   );
+  const palette = useMemo(() => profilePalette(meetings), [meetings]);
 
   async function load() {
     try {
@@ -348,6 +363,7 @@ export function MeetingCalendar() {
           cursor={cursor}
           meetings={placed}
           theme={theme}
+          palette={palette}
           onOpenDay={(day) => {
             setCursor(day);
             setView('day');
@@ -361,6 +377,7 @@ export function MeetingCalendar() {
         <TimeGrid
           gridRef={gridRef}
           theme={theme}
+          palette={palette}
           days={days}
           meetings={placed}
           onOpenAt={openMenuAt}
@@ -509,6 +526,7 @@ function TimeGrid({
   days,
   meetings,
   theme,
+  palette,
   onOpenAt,
   onMoveMeeting,
   onShift,
@@ -518,6 +536,7 @@ function TimeGrid({
   days: Date[];
   meetings: PlacedMeeting[];
   theme: Theme;
+  palette: Map<string, number>;
   onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
   onMoveMeeting: (meeting: CalendarMeeting, start: Date, end: Date) => void;
   onShift: (direction: number) => void;
@@ -875,12 +894,12 @@ function TimeGrid({
               ))}
               {timed.map((item) => {
                 const style = blockStyle(item.start, item.end);
-                const tone = colorFor(item.meeting.jobId, theme);
+                const tone = colorFor(item.meeting, theme, palette);
                 return (
                   <div
                     key={item.meeting.interview._id}
                     className="absolute cursor-grab touch-none overflow-hidden rounded-md border-l-[3px] py-1 pl-1.5 pr-5 text-left text-[12px] leading-snug"
-                    title={interviewStepLabel(item.meeting.step || 1)}
+                    title={`${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`}
                     style={{
                       top: style.top,
                       height: style.height,
@@ -898,8 +917,8 @@ function TimeGrid({
                       beginMove(event, item);
                     }}
                   >
-                    <span className="block truncate font-medium">{formatTime(item.start)} {interviewStepLabel(item.meeting.step || 1)}</span>
-                    <span className="block truncate opacity-80">{item.meeting.jobTitle}</span>
+                    <span className="block truncate font-medium">{companyLabel(item.meeting)}</span>
+                    <span className="block truncate">{formatTime(item.start)} {interviewStepLabel(item.meeting.step || 1)}</span>
                     <button
                       type="button"
                       className="absolute right-0.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-[10px] leading-none hover:bg-black/10"
@@ -926,7 +945,7 @@ function TimeGrid({
                   }}
                 >
                   <span className="block truncate font-medium">
-                    {formatTime(atMinutes(day, move.startMin))} {move.meeting.jobTitle}
+                    {formatTime(atMinutes(day, move.startMin))} {companyLabel(move.meeting)}
                   </span>
                 </div>
               ) : null}
@@ -975,7 +994,7 @@ function TimeGrid({
             ? `${WEEKDAYS[move.day.getDay()].slice(0, 3)} ${formatTime(atMinutes(move.day, move.startMin))}`
             : 'Move meeting'}
           {' · '}
-          {move.meeting.jobTitle}
+          {companyLabel(move.meeting)}
         </div>
       ) : null}
     </div>
@@ -1062,6 +1081,7 @@ function MonthView({
   cursor,
   meetings,
   theme,
+  palette,
   onOpenDay,
   onOpenMenu,
   onOpenAt,
@@ -1071,6 +1091,7 @@ function MonthView({
   cursor: Date;
   meetings: PlacedMeeting[];
   theme: Theme;
+  palette: Map<string, number>;
   onOpenDay: (day: Date) => void;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
   onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
@@ -1245,6 +1266,7 @@ function MonthView({
                   key={item.meeting.interview._id}
                   item={item}
                   theme={theme}
+                  palette={palette}
                   onOpenMenu={onOpenMenu}
                   pill
                   dragging={move?.meeting.interview._id === item.meeting.interview._id}
@@ -1284,7 +1306,7 @@ function MonthView({
           {WEEKDAYS[move.day.getDay()].slice(0, 3)} {MONTHS_SHORT[move.day.getMonth()]} {move.day.getDate()}
           {move.startMin != null ? ` ${formatTime(atMinutes(move.day, move.startMin))}` : ''}
           {' · '}
-          {move.meeting.jobTitle}
+          {companyLabel(move.meeting)}
         </div>
       ) : null}
     </div>
@@ -1294,6 +1316,7 @@ function MonthView({
 function EventChip({
   item,
   theme,
+  palette,
   onOpenMenu,
   onOpenAt,
   onPointerDown,
@@ -1302,13 +1325,14 @@ function EventChip({
 }: {
   item: PlacedMeeting;
   theme: Theme;
+  palette: Map<string, number>;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
   onOpenAt?: (meeting: CalendarMeeting, x: number, y: number) => void;
   onPointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
   dragging?: boolean;
   pill?: boolean;
 }) {
-  const tone = colorFor(item.meeting.jobId, theme);
+  const tone = colorFor(item.meeting, theme, palette);
   return (
     <div
       className={classNames(
@@ -1316,7 +1340,7 @@ function EventChip({
         pill ? 'rounded py-0.5 pl-1.5' : 'rounded px-1',
         onPointerDown && !item.allDay && 'cursor-grab touch-none',
       )}
-      title={interviewStepLabel(item.meeting.step || 1)}
+      title={`${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`}
       style={{ background: tone.bg, borderLeftColor: tone.border, color: tone.text, opacity: dragging ? 0.35 : 1 }}
       onPointerDown={onPointerDown}
       onClick={(event) => {
@@ -1328,8 +1352,8 @@ function EventChip({
       }}
     >
       {item.allDay
-        ? `${interviewStepLabel(item.meeting.step || 1)} · ${item.meeting.jobTitle}`
-        : `${formatTime(item.start)} ${interviewStepLabel(item.meeting.step || 1)} · ${item.meeting.jobTitle}`}
+        ? `${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`
+        : `${formatTime(item.start)} ${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`}
       {onOpenAt ? (
         <button
           type="button"

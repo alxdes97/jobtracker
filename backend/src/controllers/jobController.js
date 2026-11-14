@@ -181,12 +181,25 @@ function withDerived(jobDoc) {
   };
 }
 
+function jobProfileNames(job, profileById) {
+  const names = [];
+  for (const item of job.resumes || []) {
+    const fromLibrary = item.libraryResume ? profileById.get(String(item.libraryResume)) : '';
+    const name = String(fromLibrary || item.name || '').trim();
+    if (name && !names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
 export const listMeetings = asyncHandler(async (req, res) => {
   const jobs = await Job.find({ user: req.user._id, archived: false });
+  const library = await Resume.find({ user: req.user._id }).select('name');
+  const profileById = new Map(library.map((resume) => [String(resume._id), resume.name]));
   const meetings = [];
   for (const job of jobs) {
     if (applyInterviewKinds(job)) await job.save();
     const interviews = job.interviews || [];
+    const profiles = jobProfileNames(job, profileById);
     for (let index = 0; index < interviews.length; index += 1) {
       const interview = interviews[index];
       if (!interview.date && !interview.startsAt) continue;
@@ -194,6 +207,7 @@ export const listMeetings = asyncHandler(async (req, res) => {
         jobId: job._id,
         jobTitle: job.title,
         companyName: job.companyName,
+        profiles,
         status: job.status,
         step: index + 1,
         interviewCount: interviews.length,

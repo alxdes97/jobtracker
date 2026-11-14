@@ -225,6 +225,7 @@ check('saves a meeting onto the job and the calendar', async () => {
   const meeting = calendar.payload.meetings.find((item) => item.interview._id === interview._id);
   assert.ok(meeting);
   assert.equal(meeting.step, created.payload.job.interviews.length);
+  assert.deepEqual(meeting.profiles, []);
 });
 
 check('requires sign-in before AutoKey can read reminders', async () => {
