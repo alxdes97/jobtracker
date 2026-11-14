@@ -21,7 +21,7 @@ interface PlacedMeeting {
 
 const START_HOUR = 0;
 const END_HOUR = 24;
-const HOUR_PX = 48;
+const HOUR_PX = 64;
 const COLORS = [
   { bg: '#e8f0fe', border: '#1a73e8', text: '#174ea6', nightBg: '#10233f', nightText: '#d2e3fc' },
   { bg: '#e6f4ea', border: '#188038', text: '#0d652d', nightBg: '#0d2818', nightText: '#ceead6' },
