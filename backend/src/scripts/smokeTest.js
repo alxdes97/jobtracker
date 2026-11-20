@@ -391,6 +391,18 @@ check('tracks interviews, interviewers and a practice session', async () => {
   assert.equal(downloaded.status, 200);
   assert.match(await downloaded.text(), /take-home notes/);
 
+  const rewritten = await call('PATCH', `/api/jobs/${jobId}/interviews/${interviewId}`, {
+    interviewer: 'Avery Chen',
+    conversation: 'Updated the whole history.',
+    feedback: 'Clearer on metrics.',
+  });
+  assert.equal(interviewOf(rewritten.payload).interviewers[0].name, 'Avery Chen');
+  assert.equal(interviewOf(rewritten.payload).conversation.length, 1);
+  assert.equal(interviewOf(rewritten.payload).conversation[0].message, 'Updated the whole history.');
+  assert.equal(interviewOf(rewritten.payload).feedback[0].body, 'Clearer on metrics.');
+  const cleared = await call('PATCH', `/api/jobs/${jobId}/interviews/${interviewId}`, { conversation: '   ' });
+  assert.equal(interviewOf(cleared.payload).conversation.length, 0);
+
   const removed = await call('DELETE', `/api/jobs/${jobId}/interviews/${interviewId}`);
   assert.equal(removed.payload.job.interviews.length, before - 1);
   assert.equal(interviewOf(removed.payload), undefined);

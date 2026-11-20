@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CopyIcon, DownloadIcon, PencilIcon, PlusIcon, TrashIcon } from '@/components/Icons';
 import { downloadInterviewAttachment } from '@/lib/api';
+import { copyText } from '@/lib/clipboard';
 import { formatDate, toDateInput } from '@/lib/format';
 import { INTERVIEW_FORMATS, INTERVIEW_TYPES, type Interview } from '@/lib/types';
 
@@ -149,9 +150,13 @@ export function InterviewTracking({
         return label ? `${label}\n${entry.message}` : entry.message;
       })
       .join('\n\n');
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
+    try {
+      await copyText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
   }
 
   async function handleAddFeedback(event: React.FormEvent) {

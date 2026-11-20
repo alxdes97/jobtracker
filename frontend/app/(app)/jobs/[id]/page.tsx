@@ -29,9 +29,11 @@ import {
   NoteIcon,
   PaperclipIcon,
   TrashIcon,
+  CopyIcon,
   UsersIcon,
 } from '@/components/Icons';
 import { api } from '@/lib/api';
+import { copyText } from '@/lib/clipboard';
 import { classNames, hostnameOf, statusLabel, timeAgo, toDateInput } from '@/lib/format';
 import type { Job, JobStatus } from '@/lib/types';
 
@@ -67,6 +69,7 @@ export default function JobDetailPage() {
   const [tab, setTab] = useState<TabKey>('info');
   const [error, setError] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionCopied, setDescriptionCopied] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
 
   const load = useCallback(async () => {
@@ -318,16 +321,32 @@ export default function JobDetailPage() {
           <section className="card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-800">Job Description &amp; Keywords</h3>
-              <button
-                type="button"
-                className="text-xs text-brand-700 hover:underline"
-                onClick={async () => {
-                  if (editingDescription) await patch({ description });
-                  setEditingDescription(!editingDescription);
-                }}
-              >
-                {editingDescription ? 'Save description' : 'Edit description'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800"
+                  onClick={() => {
+                    const text = editingDescription ? description : job.description;
+                    void copyText(text || '').then(() => {
+                      setDescriptionCopied(true);
+                      window.setTimeout(() => setDescriptionCopied(false), 1500);
+                    }).catch(() => setDescriptionCopied(false));
+                  }}
+                >
+                  <CopyIcon className="h-3.5 w-3.5" />
+                  {descriptionCopied ? 'Copied' : 'Copy description'}
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-brand-700 hover:underline"
+                  onClick={async () => {
+                    if (editingDescription) await patch({ description });
+                    setEditingDescription(!editingDescription);
+                  }}
+                >
+                  {editingDescription ? 'Save description' : 'Edit description'}
+                </button>
+              </div>
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">

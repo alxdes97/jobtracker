@@ -62,7 +62,7 @@ export function JobBoard({ jobs, onMove, onAdd }: JobBoardProps) {
 
   useEffect(() => {
     api.listResumes().then((response) => setResumes(response.resumes)).catch(() => setResumes([]));
-  }, [jobs]);
+  }, []);
 
   // "Close Job" on a job page parks it outside the pipeline, so the column only
   // appears once something is in it — otherwise those jobs would be unreachable.

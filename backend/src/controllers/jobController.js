@@ -161,9 +161,9 @@ function standardHiringProcess() {
   return STANDARD_HIRING_STEPS.map((name) => ({ name, date: null, done: false }));
 }
 
-function withDerived(jobDoc) {
+function withDerived(jobDoc, options = {}) {
   const job = jobDoc.toJSON ? jobDoc.toJSON() : jobDoc;
-  const stageItems = job.checklist.filter((item) => item.stage === job.status);
+  const stageItems = (job.checklist || []).filter((item) => item.stage === job.status);
   const doneCount = stageItems.filter((item) => item.done).length;
   for (const interview of job.interviews || []) {
     for (const attachment of interview.attachments || []) delete attachment.storedName;
@@ -171,7 +171,7 @@ function withDerived(jobDoc) {
 
   return {
     ...job,
-    keywords: extractKeywords(job.description),
+    keywords: options.keywords === false ? { sections: [], total: 0 } : extractKeywords(job.description),
     guidance: {
       stage: job.status,
       total: stageItems.length,
@@ -191,13 +191,104 @@ function jobProfileNames(job, profileById) {
   return names;
 }
 
+const LIST_FIELDS = [
+  'title',
+  'companyName',
+  'company',
+  'location',
+  'url',
+  'status',
+  'order',
+  'salaryMin',
+  'salaryMax',
+  'salaryCurrency',
+  'excitement',
+  'dateSaved',
+  'dateApplied',
+  'deadline',
+  'followUp',
+  'archived',
+  'resumes',
+  'contacts',
+  'checklist',
+  'interviews._id',
+  'interviews.date',
+  'interviews.startsAt',
+  'interviews.endsAt',
+  'interviews.type',
+  'interviews.format',
+  'interviews.interviewers',
+].join(' ');
+
+function interviewNeedsKind(interviews) {
+  return interviews.length > 0 && interviews.every((interview) => !interview.type || interview.type === 'Other');
+}
+
 export const listMeetings = asyncHandler(async (req, res) => {
-  const jobs = await Job.find({ user: req.user._id, archived: false });
-  const library = await Resume.find({ user: req.user._id }).select('name');
+  const [jobs, library] = await Promise.all([
+    Job.aggregate([
+      { $match: { user: req.user._id, archived: false } },
+      {
+        $project: {
+          title: 1,
+          companyName: 1,
+          status: 1,
+          resumes: 1,
+          interviews: {
+            $map: {
+              input: { $ifNull: ['$interviews', []] },
+              as: 'interview',
+              in: {
+                _id: '$$interview._id',
+                date: '$$interview.date',
+                startsAt: '$$interview.startsAt',
+                endsAt: '$$interview.endsAt',
+                type: { $ifNull: ['$$interview.type', ''] },
+                format: { $ifNull: ['$$interview.format', ''] },
+                interviewers: { $ifNull: ['$$interview.interviewers', []] },
+                hasConversation: {
+                  $anyElementTrue: {
+                    $map: {
+                      input: { $ifNull: ['$$interview.conversation', []] },
+                      as: 'entry',
+                      in: {
+                        $gt: [
+                          { $strLenCP: { $trim: { input: { $ifNull: ['$$entry.message', ''] } } } },
+                          0,
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ]),
+    Resume.find({ user: req.user._id }).select('name').lean(),
+  ]);
   const profileById = new Map(library.map((resume) => [String(resume._id), resume.name]));
+  const kindIds = jobs
+    .filter((job) => interviewNeedsKind(job.interviews || []))
+    .map((job) => job._id);
+  if (kindIds.length) {
+    const fullJobs = await Job.find({ _id: { $in: kindIds }, user: req.user._id });
+    await Promise.all(
+      fullJobs.map(async (job) => {
+        if (!applyInterviewKinds(job)) return;
+        await job.save();
+        const summary = jobs.find((item) => String(item._id) === String(job._id));
+        if (!summary) return;
+        job.interviews.forEach((interview, index) => {
+          if (summary.interviews[index]) summary.interviews[index].type = interview.type || '';
+        });
+      }),
+    );
+  }
+
   const meetings = [];
   for (const job of jobs) {
-    if (applyInterviewKinds(job)) await job.save();
     const interviews = job.interviews || [];
     const profiles = jobProfileNames(job, profileById);
     for (let index = 0; index < interviews.length; index += 1) {
@@ -211,6 +302,7 @@ export const listMeetings = asyncHandler(async (req, res) => {
         status: job.status,
         step: index + 1,
         interviewCount: interviews.length,
+        hasConversation: Boolean(interview.hasConversation),
         lineup: interviews.map((item, itemIndex) => ({
           id: item._id,
           step: itemIndex + 1,
@@ -222,7 +314,23 @@ export const listMeetings = asyncHandler(async (req, res) => {
             .filter(Boolean)
             .join(', '),
         })),
-        interview: interview.toJSON(),
+        interview: {
+          _id: interview._id,
+          date: interview.date,
+          startsAt: interview.startsAt,
+          endsAt: interview.endsAt,
+          type: interview.type || '',
+          format: interview.format || '',
+          interviewers: (interview.interviewers || []).map((person) => ({
+            _id: person._id,
+            name: person.name,
+            title: person.title || '',
+          })),
+          conversation: [],
+          feedback: [],
+          attachments: [],
+          practiceSessions: [],
+        },
       });
     }
   }
@@ -291,12 +399,39 @@ export const listJobs = asyncHandler(async (req, res) => {
     excitement: { excitement: -1 },
   };
 
-  const jobs = await Job.find(filter).sort(sortMap[sort] || sortMap.order);
-  for (const job of jobs) {
-    await advanceToInterviewing(job);
-    if (applyInterviewKinds(job)) await job.save();
+  const jobs = await Job.find(filter).select(LIST_FIELDS).sort(sortMap[sort] || sortMap.order).lean();
+  const staleIds = jobs
+    .filter((job) => {
+      const interviews = job.interviews || [];
+      const needsAdvance = !job.archived && BEFORE_INTERVIEWING.has(job.status) && interviews.length > 0;
+      return needsAdvance || interviewNeedsKind(interviews);
+    })
+    .map((job) => job._id);
+  if (staleIds.length) {
+    const fullJobs = await Job.find({ _id: { $in: staleIds }, user: req.user._id });
+    await Promise.all(
+      fullJobs.map(async (job) => {
+        const advanced = await advanceToInterviewing(job);
+        if (applyInterviewKinds(job)) await job.save();
+        else if (!advanced) return;
+        const summary = jobs.find((item) => String(item._id) === String(job._id));
+        if (!summary) return;
+        summary.status = job.status;
+        summary.order = job.order;
+        summary.checklist = job.checklist;
+        summary.interviews = (job.interviews || []).map((interview) => ({
+          _id: interview._id,
+          date: interview.date,
+          startsAt: interview.startsAt,
+          endsAt: interview.endsAt,
+          type: interview.type || '',
+          format: interview.format || '',
+          interviewers: interview.interviewers || [],
+        }));
+      }),
+    );
   }
-  res.json({ jobs: jobs.map((job) => withDerived(job)) });
+  res.json({ jobs: jobs.map((job) => withDerived(job, { keywords: false })) });
 });
 
 export const jobStats = asyncHandler(async (req, res) => {
@@ -645,6 +780,20 @@ export const updateInterview = asyncHandler(async (req, res) => {
     interview.startsAt = startsAt;
     interview.endsAt = endsAt;
     interview.date = startsAt;
+  }
+  if ('interviewer' in req.body) {
+    const name = String(req.body.interviewer || '').trim().slice(0, 120);
+    if (!name) throw ApiError.badRequest('Interviewer name is required');
+    interview.interviewers = [{ name, title: '' }];
+  }
+  if ('conversation' in req.body) {
+    const message = String(req.body.conversation ?? '').trim();
+    interview.conversation = message ? [{ speaker: '', message: conversationMessage(message) }] : [];
+  }
+  if ('feedback' in req.body) {
+    const body = String(req.body.feedback ?? '').trim();
+    if (body.length > CONVERSATION_LIMIT) throw ApiError.badRequest('Feedback is too long');
+    interview.feedback = body ? [{ body }] : [];
   }
 
   await job.save();

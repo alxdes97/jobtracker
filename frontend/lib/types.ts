@@ -156,6 +156,7 @@ export interface CalendarMeeting {
   step: number;
   interviewCount: number;
   lineup: MeetingLineupItem[];
+  hasConversation?: boolean;
   interview: Interview;
 }
 

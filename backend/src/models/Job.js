@@ -159,6 +159,7 @@ const jobSchema = new mongoose.Schema(
 );
 
 jobSchema.index({ user: 1, status: 1, order: 1 });
+jobSchema.index({ user: 1, archived: 1, status: 1, order: 1 });
 
 jobSchema.pre('save', function setInitialHistory(next) {
   if (this.isNew && this.statusHistory.length === 0) {

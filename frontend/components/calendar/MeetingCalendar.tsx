@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal } from '@/components/Modal';
-import { PlusIcon } from '@/components/Icons';
+import { CloseIcon, PencilIcon, PlusIcon } from '@/components/Icons';
 import { api, downloadInterviewAttachment } from '@/lib/api';
 import { classNames } from '@/lib/format';
 import { jobProfileNames, profileNameOf } from '@/lib/resumeProfile';
@@ -42,15 +42,43 @@ function profilePalette(meetings: CalendarMeeting[]) {
   return new Map(keys.map((key, index) => [key, index]));
 }
 
-function colorFor(meeting: CalendarMeeting, theme: Theme, palette: Map<string, number>) {
-  const key = profileKey(meeting);
+function toneForKey(key: string, theme: Theme, palette: Map<string, number>) {
   const tone = key ? COLORS[(palette.get(key) ?? 0) % COLORS.length] : NEUTRAL;
   if (theme === 'black') return { bg: tone.nightBg, border: tone.border, text: tone.nightText };
   return tone;
 }
 
+function colorFor(meeting: CalendarMeeting, theme: Theme, palette: Map<string, number>) {
+  return toneForKey(profileKey(meeting), theme, palette);
+}
+
 function companyLabel(meeting: CalendarMeeting) {
   return meeting.companyName.trim() || meeting.jobTitle;
+}
+
+function missingConversation(meeting: CalendarMeeting) {
+  if (typeof meeting.hasConversation === 'boolean') return !meeting.hasConversation;
+  return !(meeting.interview.conversation ?? []).some((entry) => entry.message.trim());
+}
+
+function eventFill(tone: { bg: string }, meeting: CalendarMeeting, theme: Theme) {
+  if (!missingConversation(meeting)) return tone.bg;
+  const stripe = theme === 'black' ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.16)';
+  return `repeating-linear-gradient(-45deg, ${tone.bg} 0 6px, ${stripe} 6px 10px)`;
+}
+
+function conversationText(meeting: CalendarMeeting) {
+  return (meeting.interview.conversation ?? [])
+    .map((entry) => (entry.speaker ? `${entry.speaker}: ${entry.message}` : entry.message))
+    .join('\n\n');
+}
+
+function feedbackText(meeting: CalendarMeeting) {
+  return (meeting.interview.feedback ?? []).map((note) => note.body).join('\n\n');
+}
+
+function interviewerText(meeting: CalendarMeeting) {
+  return meeting.interview.interviewers.map((person) => person.name).filter(Boolean).join(', ');
 }
 
 function interviewStepLabel(step: number) {
@@ -221,12 +249,24 @@ export function MeetingCalendar() {
   const [proposed, setProposed] = useState<{ start: string; end: string } | null>(null);
   const [menu, setMenu] = useState<{ meeting: CalendarMeeting; x: number; y: number } | null>(null);
   const [details, setDetails] = useState<CalendarMeeting | null>(null);
+  const [editing, setEditing] = useState<CalendarMeeting | null>(null);
 
   const placed = useMemo(
     () => meetings.map(placeMeeting).filter((item): item is PlacedMeeting => Boolean(item)),
     [meetings],
   );
   const palette = useMemo(() => profilePalette(meetings), [meetings]);
+  const legend = useMemo(() => {
+    const items = [...palette.keys()].map((key) => ({
+      key,
+      label: key,
+      tone: toneForKey(key, theme, palette),
+    }));
+    if (meetings.some((meeting) => !profileKey(meeting))) {
+      items.push({ key: '', label: 'No profile', tone: toneForKey('', theme, palette) });
+    }
+    return items;
+  }, [meetings, palette, theme]);
 
   async function load() {
     try {
@@ -301,13 +341,56 @@ export function MeetingCalendar() {
       if (!saved) return;
       setMeetings((current) =>
         current.map((item) =>
-          item.interview._id === saved._id ? { ...item, interview: { ...item.interview, ...saved } } : item,
+          item.interview._id === saved._id
+            ? {
+                ...item,
+                hasConversation: (saved.conversation ?? []).some((entry) => entry.message.trim()),
+                interview: { ...item.interview, ...saved },
+              }
+            : item,
         ),
       );
     } catch (moveError) {
       setMeetings(previous);
       setError(moveError instanceof Error ? moveError.message : 'Could not move the meeting');
     }
+  }
+
+  function openEditor(meeting: CalendarMeeting) {
+    setMenu(null);
+    setEditing(meeting);
+  }
+
+  async function removeMeeting(meeting: CalendarMeeting) {
+    const label = companyLabel(meeting);
+    if (!window.confirm(`Remove the ${label} meeting?`)) return;
+    const previous = meetings;
+    setMenu(null);
+    setDetails((current) => (current?.interview._id === meeting.interview._id ? null : current));
+    setEditing((current) => (current?.interview._id === meeting.interview._id ? null : current));
+    setMeetings((current) => current.filter((item) => item.interview._id !== meeting.interview._id));
+    try {
+      await api.deleteInterview(meeting.jobId, meeting.interview._id);
+    } catch (removeError) {
+      setMeetings(previous);
+      setError(removeError instanceof Error ? removeError.message : 'Could not remove the meeting');
+    }
+  }
+
+  function applySavedInterview(job: Job, interviewId: string) {
+    const saved = job.interviews.find((item) => item._id === interviewId);
+    if (!saved) return;
+    setMeetings((current) =>
+      current.map((item) =>
+        item.interview._id === interviewId
+          ? {
+              ...item,
+              hasConversation: (saved.conversation ?? []).some((entry) => entry.message.trim()),
+              interview: { ...item.interview, ...saved },
+            }
+          : item,
+      ),
+    );
   }
 
   const days = view === 'day' ? [startOfDay(cursor)] : Array.from({ length: 7 }, (_, index) => addDays(startOfWeek(cursor), index));
@@ -356,6 +439,21 @@ export function MeetingCalendar() {
         </div>
       </div>
 
+      {legend.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-200 px-4 py-2">
+          {legend.map((item) => (
+            <span key={item.key || 'none'} className="inline-flex items-center gap-1.5 text-xs text-slate-700">
+              <span
+                className="inline-block h-3 w-3 shrink-0 rounded-sm border-l-[3px]"
+                style={{ background: item.tone.bg, borderLeftColor: item.tone.border }}
+                aria-hidden="true"
+              />
+              {item.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       {error ? <p className="px-4 py-2 text-sm text-red-600">{error}</p> : null}
 
       {view === 'month' ? (
@@ -370,6 +468,8 @@ export function MeetingCalendar() {
           }}
           onOpenMenu={openMenu}
           onOpenAt={openMenuAt}
+          onEdit={openEditor}
+          onRemove={removeMeeting}
           onMoveMeeting={moveMeeting}
           onShift={shift}
         />
@@ -381,6 +481,8 @@ export function MeetingCalendar() {
           days={days}
           meetings={placed}
           onOpenAt={openMenuAt}
+          onEdit={openEditor}
+          onRemove={removeMeeting}
           onMoveMeeting={moveMeeting}
           onShift={shift}
           onCreateRange={(start, end) => {
@@ -434,6 +536,14 @@ export function MeetingCalendar() {
         }}
       />
       <MeetingDetailsModal meeting={details} onClose={() => setDetails(null)} />
+      <EditMeetingModal
+        meeting={editing}
+        onClose={() => setEditing(null)}
+        onSaved={(job) => {
+          if (editing) applySavedInterview(job, editing.interview._id);
+          setEditing(null);
+        }}
+      />
     </div>
   );
 }
@@ -528,6 +638,8 @@ function TimeGrid({
   theme,
   palette,
   onOpenAt,
+  onEdit,
+  onRemove,
   onMoveMeeting,
   onShift,
   onCreateRange,
@@ -538,6 +650,8 @@ function TimeGrid({
   theme: Theme;
   palette: Map<string, number>;
   onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
+  onEdit: (meeting: CalendarMeeting) => void;
+  onRemove: (meeting: CalendarMeeting) => void;
   onMoveMeeting: (meeting: CalendarMeeting, start: Date, end: Date) => void;
   onShift: (direction: number) => void;
   onCreateRange: (start: Date, end: Date) => void;
@@ -898,14 +1012,14 @@ function TimeGrid({
                 return (
                   <div
                     key={item.meeting.interview._id}
-                    className="absolute cursor-grab touch-none overflow-hidden rounded-md border-l-[3px] py-1 pl-1.5 pr-5 text-left text-[12px] leading-snug"
-                    title={`${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`}
+                    className="absolute cursor-grab touch-none overflow-hidden rounded-md border-l-[3px] py-1 pl-1.5 pr-14 text-left text-[12px] leading-snug"
+                    title={`${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}${missingConversation(item.meeting) ? ' · No conversation history' : ''}`}
                     style={{
                       top: style.top,
                       height: style.height,
                       left: `calc(${(item.col / item.cols) * 100}% + 2px)`,
                       width: `calc(${100 / item.cols}% - 4px)`,
-                      background: tone.bg,
+                      background: eventFill(tone, item.meeting, theme),
                       borderLeftColor: tone.border,
                       color: tone.text,
                       opacity: move?.meeting.interview._id === item.meeting.interview._id ? 0.35 : 1,
@@ -919,20 +1033,7 @@ function TimeGrid({
                   >
                     <span className="block truncate font-medium">{companyLabel(item.meeting)}</span>
                     <span className="block truncate">{formatTime(item.start)} {interviewStepLabel(item.meeting.step || 1)}</span>
-                    <button
-                      type="button"
-                      className="absolute right-0.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-[10px] leading-none hover:bg-black/10"
-                      aria-label="Meeting options"
-                      title="Meeting options"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        onOpenAt(item.meeting, rect.left, rect.bottom);
-                      }}
-                    >
-                      ▾
-                    </button>
+                    <BlockActions meeting={item.meeting} onEdit={onEdit} onRemove={onRemove} onOpenAt={onOpenAt} />
                   </div>
                 );
               })}
@@ -1085,6 +1186,8 @@ function MonthView({
   onOpenDay,
   onOpenMenu,
   onOpenAt,
+  onEdit,
+  onRemove,
   onMoveMeeting,
   onShift,
 }: {
@@ -1093,6 +1196,8 @@ function MonthView({
   theme: Theme;
   palette: Map<string, number>;
   onOpenDay: (day: Date) => void;
+  onEdit: (meeting: CalendarMeeting) => void;
+  onRemove: (meeting: CalendarMeeting) => void;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
   onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
   onMoveMeeting: (meeting: CalendarMeeting, start: Date, end: Date) => void;
@@ -1267,6 +1372,9 @@ function MonthView({
                   item={item}
                   theme={theme}
                   palette={palette}
+                  onEdit={onEdit}
+                  onRemove={onRemove}
+                  onOpenAt={onOpenAt}
                   onOpenMenu={onOpenMenu}
                   pill
                   dragging={move?.meeting.interview._id === item.meeting.interview._id}
@@ -1276,7 +1384,6 @@ function MonthView({
                     event.preventDefault();
                     beginMonthMove(event, item);
                   }}
-                  onOpenAt={onOpenAt}
                 />
               ))}
               {hidden > 0 ? (
@@ -1317,8 +1424,10 @@ function EventChip({
   item,
   theme,
   palette,
-  onOpenMenu,
+  onEdit,
+  onRemove,
   onOpenAt,
+  onOpenMenu,
   onPointerDown,
   dragging = false,
   pill = false,
@@ -1326,8 +1435,10 @@ function EventChip({
   item: PlacedMeeting;
   theme: Theme;
   palette: Map<string, number>;
+  onEdit: (meeting: CalendarMeeting) => void;
+  onRemove: (meeting: CalendarMeeting) => void;
+  onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
   onOpenMenu: (meeting: CalendarMeeting, event: React.MouseEvent) => void;
-  onOpenAt?: (meeting: CalendarMeeting, x: number, y: number) => void;
   onPointerDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
   dragging?: boolean;
   pill?: boolean;
@@ -1336,12 +1447,12 @@ function EventChip({
   return (
     <div
       className={classNames(
-        'relative block w-full truncate border-l-[3px] pr-4 text-left text-[12px] leading-4',
+        'relative block w-full truncate border-l-[3px] pr-14 text-left text-[12px] leading-4',
         pill ? 'rounded py-0.5 pl-1.5' : 'rounded px-1',
         onPointerDown && !item.allDay && 'cursor-grab touch-none',
       )}
-      title={`${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`}
-      style={{ background: tone.bg, borderLeftColor: tone.border, color: tone.text, opacity: dragging ? 0.35 : 1 }}
+      title={`${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}${missingConversation(item.meeting) ? ' · No conversation history' : ''}`}
+      style={{ background: eventFill(tone, item.meeting, theme), borderLeftColor: tone.border, color: tone.text, opacity: dragging ? 0.35 : 1 }}
       onPointerDown={onPointerDown}
       onClick={(event) => {
         if (Date.now() < suppressChipClickUntil || dragging) {
@@ -1354,23 +1465,65 @@ function EventChip({
       {item.allDay
         ? `${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`
         : `${formatTime(item.start)} ${interviewStepLabel(item.meeting.step || 1)} · ${companyLabel(item.meeting)}`}
-      {onOpenAt ? (
-        <button
-          type="button"
-          className="absolute right-0.5 top-1/2 z-10 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded text-[10px] leading-none hover:bg-black/10"
-          aria-label="Meeting options"
-          title="Meeting options"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            const rect = event.currentTarget.getBoundingClientRect();
-            onOpenAt(item.meeting, rect.left, rect.bottom);
-          }}
-        >
-          ▾
-        </button>
-      ) : null}
+      <BlockActions meeting={item.meeting} onEdit={onEdit} onRemove={onRemove} onOpenAt={onOpenAt} />
     </div>
+  );
+}
+
+function BlockActions({
+  meeting,
+  onEdit,
+  onRemove,
+  onOpenAt,
+}: {
+  meeting: CalendarMeeting;
+  onEdit: (meeting: CalendarMeeting) => void;
+  onRemove: (meeting: CalendarMeeting) => void;
+  onOpenAt: (meeting: CalendarMeeting, x: number, y: number) => void;
+}) {
+  return (
+    <span className="absolute right-0.5 top-0.5 z-10 flex">
+      <button
+        type="button"
+        className="flex h-4 w-4 items-center justify-center rounded hover:bg-black/10"
+        aria-label="Edit meeting"
+        title="Edit meeting"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onEdit(meeting);
+        }}
+      >
+        <PencilIcon className="h-3 w-3" />
+      </button>
+      <button
+        type="button"
+        className="flex h-4 w-4 items-center justify-center rounded text-[10px] leading-none hover:bg-black/10"
+        aria-label="Meeting options"
+        title="Meeting options"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          const rect = event.currentTarget.getBoundingClientRect();
+          onOpenAt(meeting, rect.left, rect.bottom);
+        }}
+      >
+        ▾
+      </button>
+      <button
+        type="button"
+        className="flex h-4 w-4 items-center justify-center rounded hover:bg-black/10"
+        aria-label="Remove meeting"
+        title="Remove meeting"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove(meeting);
+        }}
+      >
+        <CloseIcon className="h-3 w-3" />
+      </button>
+    </span>
   );
 }
 
@@ -1431,6 +1584,7 @@ function CreateMeetingModal({
   const [creatingJob, setCreatingJob] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCompany, setNewCompany] = useState('');
+  const [newDescription, setNewDescription] = useState('');
   const [resumes, setResumes] = useState<ResumeFile[]>([]);
   const [profile, setProfile] = useState('');
   const [error, setError] = useState('');
@@ -1458,6 +1612,7 @@ function CreateMeetingModal({
     setCreatingJob(false);
     setNewTitle('');
     setNewCompany('');
+    setNewDescription('');
     setInterviewer('');
     setConversation('');
     setFeedback('');
@@ -1514,6 +1669,7 @@ function CreateMeetingModal({
         const response = await api.createJob({
           title: newTitle.trim(),
           companyName: newCompany.trim(),
+          description: newDescription.trim(),
           status: 'Interviewing',
         });
         jobWasCreated = true;
@@ -1603,6 +1759,14 @@ function CreateMeetingModal({
               <label className="block text-sm text-slate-600">
                 Company
                 <input className="input mt-1" value={newCompany} onChange={(event) => setNewCompany(event.target.value)} required />
+              </label>
+              <label className="block text-sm text-slate-600">
+                Job description
+                <textarea
+                  className="input mt-1 h-32 resize-none overflow-y-auto whitespace-pre-wrap"
+                  value={newDescription}
+                  onChange={(event) => setNewDescription(event.target.value)}
+                />
               </label>
               <button
                 type="button"
@@ -1708,9 +1872,165 @@ function CreateMeetingModal({
   );
 }
 
-function MeetingDetailsModal({ meeting, onClose }: { meeting: CalendarMeeting | null; onClose: () => void }) {
+function EditMeetingModal({
+  meeting,
+  onClose,
+  onSaved,
+}: {
+  meeting: CalendarMeeting | null;
+  onClose: () => void;
+  onSaved: (job: Job) => void;
+}) {
+  const [startsAt, setStartsAt] = useState('');
+  const [endsAt, setEndsAt] = useState('');
+  const [interviewer, setInterviewer] = useState('');
+  const [conversation, setConversation] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [detailsReady, setDetailsReady] = useState(false);
+  const original = useRef({ interviewer: '', conversation: '', feedback: '' });
+
+  useEffect(() => {
+    if (!meeting) return;
+    let cancelled = false;
+    const start = meeting.interview.startsAt
+      ? new Date(meeting.interview.startsAt)
+      : meeting.interview.date
+        ? new Date(meeting.interview.date)
+        : new Date();
+    const end = meeting.interview.endsAt ? new Date(meeting.interview.endsAt) : new Date(start.getTime() + 60 * 60 * 1000);
+    setStartsAt(localDateTimeValue(start));
+    setEndsAt(localDateTimeValue(end));
+    setInterviewer(interviewerText(meeting));
+    setConversation('');
+    setFeedback('');
+    setDetailsReady(false);
+    setError('');
+    api.getJob(meeting.jobId).then((response) => {
+      if (cancelled) return;
+      const full = response.job.interviews.find((item) => item._id === meeting.interview._id);
+      const source = full ? { ...meeting, interview: { ...meeting.interview, ...full } } : meeting;
+      const people = interviewerText(source);
+      const history = conversationText(source);
+      const notes = feedbackText(source);
+      setInterviewer(people);
+      setConversation(history);
+      setFeedback(notes);
+      original.current = { interviewer: people, conversation: history, feedback: notes };
+      setDetailsReady(true);
+    }).catch(() => {
+      if (cancelled) return;
+      setError('Could not load the meeting details.');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [meeting]);
+
   if (!meeting) return null;
-  const interview = meeting.interview;
+  const current = meeting;
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    const start = new Date(startsAt);
+    const end = new Date(endsAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+      setError('Enter a start and an end, with the end after the start.');
+      return;
+    }
+    if (!interviewer.trim()) {
+      setError('Enter the interviewer.');
+      return;
+    }
+    const data: {
+      startsAt: string;
+      endsAt: string;
+      interviewer?: string;
+      conversation?: string;
+      feedback?: string;
+    } = { startsAt: start.toISOString(), endsAt: end.toISOString() };
+    if (interviewer.trim() !== original.current.interviewer) data.interviewer = interviewer.trim();
+    if (conversation.trim() !== original.current.conversation.trim()) data.conversation = conversation.trim();
+    if (feedback.trim() !== original.current.feedback.trim()) data.feedback = feedback.trim();
+    setSaving(true);
+    setError('');
+    try {
+      const response = await api.updateInterview(current.jobId, current.interview._id, data);
+      onSaved(response.job);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save the meeting');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title={`Edit ${companyLabel(current)}`}
+      onClose={onClose}
+      width="lg"
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" form="edit-meeting-form" className="btn-primary" disabled={saving || !detailsReady}>
+            {saving ? 'Saving…' : 'Save meeting'}
+          </button>
+        </>
+      }
+    >
+      <form id="edit-meeting-form" className="space-y-4" onSubmit={save}>
+        <p className="text-sm text-slate-500">{current.jobTitle}</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm text-slate-600">
+            Starts
+            <input className="input mt-1" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} required />
+          </label>
+          <label className="block text-sm text-slate-600">
+            Ends
+            <input className="input mt-1" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} required />
+          </label>
+        </div>
+        <label className="block text-sm text-slate-600">
+          Interviewer
+          <input className="input mt-1" value={interviewer} onChange={(event) => setInterviewer(event.target.value)} required />
+        </label>
+        <label className="block text-sm text-slate-600">
+          Conversation history
+          <textarea className="input mt-1 max-h-80 min-h-32 resize-y overflow-y-auto whitespace-pre-wrap" value={conversation} onChange={(event) => setConversation(event.target.value)} />
+        </label>
+        <label className="block text-sm text-slate-600">
+          Feedback
+          <textarea className="input mt-1 max-h-80 min-h-20 resize-y overflow-y-auto whitespace-pre-wrap" value={feedback} onChange={(event) => setFeedback(event.target.value)} />
+        </label>
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      </form>
+    </Modal>
+  );
+}
+
+function MeetingDetailsModal({ meeting, onClose }: { meeting: CalendarMeeting | null; onClose: () => void }) {
+  const [interview, setInterview] = useState<CalendarMeeting['interview'] | null>(null);
+
+  useEffect(() => {
+    if (!meeting) {
+      setInterview(null);
+      return;
+    }
+    let cancelled = false;
+    setInterview(meeting.interview);
+    api.getJob(meeting.jobId).then((response) => {
+      if (cancelled) return;
+      const full = response.job.interviews.find((item) => item._id === meeting.interview._id);
+      if (full) setInterview({ ...meeting.interview, ...full });
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [meeting]);
+
+  if (!meeting || !interview) return null;
   const start = interview.startsAt ? new Date(interview.startsAt) : interview.date ? new Date(interview.date) : null;
   const end = interview.endsAt ? new Date(interview.endsAt) : null;
   const when = start

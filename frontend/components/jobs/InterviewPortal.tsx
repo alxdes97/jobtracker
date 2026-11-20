@@ -43,7 +43,7 @@ export function InterviewPortal({ jobs, onClose }: InterviewPortalProps) {
 
   useEffect(() => {
     api.listResumes().then((response) => setResumes(response.resumes)).catch(() => setResumes([]));
-  }, [jobs]);
+  }, []);
   const furthest = interviewing.reduce(
     (max, job) => Math.max(max, job.interviews?.length ?? 0),
     0,
