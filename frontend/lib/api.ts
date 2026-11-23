@@ -332,6 +332,7 @@ export const api = {
     if (submitterId) query.set('submitterId', submitterId);
     return request<{ applications: TrackedApplication[] }>(`/applications?${query.toString()}`);
   },
+  deleteTrackedApplication: (id: string) => request<void>(`/applications/${id}`, { method: 'DELETE' }),
 
   listTemplates: () => request<{ templates: EmailTemplate[] }>('/templates'),
   createTemplate: (data: Partial<EmailTemplate>) =>

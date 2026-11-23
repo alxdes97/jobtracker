@@ -747,6 +747,25 @@ check('records one submitted application for a submitter', async () => {
   });
   assert.equal(recorded.status, 201);
   assert.equal(recorded.payload.application.title, 'Engineer');
+  const again = await call('POST', '/api/application-track/applications', {
+    url: 'https://jobs.example.com/apply?step=2',
+    domain: 'jobs.example.com',
+    pageTitle: 'Apply',
+    submitted: false,
+    fields: [{ label: 'Phone', name: 'phone', value: '555-0100' }],
+  });
+  assert.equal(again.status, 200);
+  assert.equal(String(again.payload.application._id), String(recorded.payload.application._id));
+  assert.equal(again.payload.application.submitted, false);
+  const submitted = await call('POST', '/api/application-track/applications', {
+    url: 'https://jobs.example.com/apply?done=1',
+    domain: 'jobs.example.com',
+    pageTitle: 'Apply',
+    submitted: true,
+    fields: [{ label: 'Phone', name: 'phone', value: '555-0100' }],
+  });
+  assert.equal(String(submitted.payload.application._id), String(recorded.payload.application._id));
+  assert.equal(submitted.payload.application.submitted, true);
 
   token = previousToken;
   const start = new Date();
@@ -763,6 +782,10 @@ check('records one submitted application for a submitter', async () => {
   assert.equal(removed.status, 204);
   const kept = await call('GET', `/api/applications?${query}`);
   assert.equal(kept.payload.applications.length, 1);
+  const deleted = await call('DELETE', `/api/applications/${kept.payload.applications[0]._id}`);
+  assert.equal(deleted.status, 204);
+  const afterDelete = await call('GET', `/api/applications?${query}`);
+  assert.equal(afterDelete.payload.applications.length, 0);
 });
 
 async function run() {

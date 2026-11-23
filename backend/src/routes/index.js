@@ -140,6 +140,7 @@ router.get('/application-submitters', applicationTrack.listSubmitters);
 router.post('/application-submitters', applicationTrack.createSubmitter);
 router.delete('/application-submitters/:id', applicationTrack.deleteSubmitter);
 router.get('/applications', applicationTrack.listApplications);
+router.delete('/applications/:id', applicationTrack.deleteApplication);
 
 router.get('/resumes', resumes.listResumes);
 router.post('/resumes', resumes.resumeUpload, resumes.createResume);

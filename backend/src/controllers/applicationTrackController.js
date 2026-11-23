@@ -53,6 +53,40 @@ function fieldMatch(fields, pattern) {
   return fields.find((field) => pattern.test(`${field.label} ${field.name}`))?.value || '';
 }
 
+function pageKeyFrom(url, domain) {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/$/, '');
+    return `${parsed.origin}${path}`.slice(0, 300);
+  } catch {
+    return String(domain || '').trim().slice(0, 300);
+  }
+}
+
+function mergeFields(current, incoming) {
+  const merged = new Map();
+  for (const field of current || []) {
+    merged.set(`${field.name}|${field.label}`, field);
+  }
+  for (const field of incoming || []) {
+    merged.set(`${field.name}|${field.label}`, field);
+  }
+  return [...merged.values()].slice(0, FIELD_LIMIT);
+}
+
+function applySnapshot(application, snapshot) {
+  application.url = snapshot.url || application.url;
+  application.domain = snapshot.domain || application.domain;
+  application.pageTitle = snapshot.pageTitle || application.pageTitle;
+  application.pageKey = snapshot.pageKey || application.pageKey;
+  application.sessionId = snapshot.sessionId || application.sessionId;
+  application.title = snapshot.title || application.title;
+  application.company = snapshot.company || application.company;
+  application.fields = mergeFields(application.fields, snapshot.fields);
+  application.appliedAt = new Date();
+  if (snapshot.submitted) application.submitted = true;
+}
+
 export const login = asyncHandler(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
@@ -83,19 +117,52 @@ export const record = asyncHandler(async (req, res) => {
     || pageTitle;
   const company = String(req.body.company || '').trim().slice(0, 180)
     || fieldMatch(fields, /company/i);
-  if (!url && fields.length === 0) throw ApiError.badRequest('Application content is required');
+  const submitted = req.body.submitted === true;
+  const sessionId = String(req.body.sessionId || '').trim().slice(0, 80);
+  const pageKey = pageKeyFrom(url, domain);
+  if (!pageKey && fields.length === 0) throw ApiError.badRequest('Application content is required');
+  if (!submitted && fields.length === 0) {
+    res.status(204).end();
+    return;
+  }
 
-  const application = await TrackedApplication.create({
-    owner: req.submitter.owner,
-    submitter: req.submitter._id,
-    submitterEmail: req.submitter.email,
-    submitterName: req.submitter.name,
+  const snapshot = {
     url,
     domain,
     title,
     company,
     pageTitle,
+    pageKey,
+    sessionId,
     fields,
+    submitted,
+  };
+  const openFilter = {
+    owner: req.submitter.owner,
+    submitter: req.submitter._id,
+    pageKey,
+    submitted: { $ne: true },
+  };
+  let application = pageKey
+    ? await TrackedApplication.findOne(sessionId ? { ...openFilter, sessionId } : openFilter).sort({ updatedAt: -1 })
+    : null;
+  if (!application && pageKey) {
+    application = await TrackedApplication.findOne(openFilter).sort({ updatedAt: -1 });
+  }
+
+  if (application) {
+    applySnapshot(application, snapshot);
+    await application.save();
+    res.json({ application });
+    return;
+  }
+
+  application = await TrackedApplication.create({
+    owner: req.submitter.owner,
+    submitter: req.submitter._id,
+    submitterEmail: req.submitter.email,
+    submitterName: req.submitter.name,
+    ...snapshot,
     appliedAt: new Date(),
   });
   res.status(201).json({ application });
@@ -142,6 +209,43 @@ export const listApplications = asyncHandler(async (req, res) => {
   }
   const filter = { owner: req.user._id, appliedAt: { $gte: from, $lt: to } };
   if (req.query.submitterId) filter.submitter = String(req.query.submitterId);
-  const applications = await TrackedApplication.find(filter).sort({ appliedAt: -1 }).limit(500);
-  res.json({ applications });
+  const found = await TrackedApplication.find(filter).sort({ appliedAt: -1 }).limit(500);
+  const openByPage = new Map();
+  const kept = [];
+  const removeIds = [];
+  for (const application of found) {
+    const pageKey = application.pageKey || pageKeyFrom(application.url, application.domain);
+    if (pageKey && application.pageKey !== pageKey) application.pageKey = pageKey;
+    if (application.submitted || !pageKey) {
+      if (application.isModified()) await application.save();
+      kept.push(application);
+      continue;
+    }
+    const groupKey = `${application.submitter}|${pageKey}`;
+    const existing = openByPage.get(groupKey);
+    if (!existing) {
+      openByPage.set(groupKey, application);
+      kept.push(application);
+      continue;
+    }
+    existing.fields = mergeFields(existing.fields, application.fields);
+    if (!existing.url) existing.url = application.url;
+    if (!existing.title) existing.title = application.title;
+    if (!existing.company) existing.company = application.company;
+    removeIds.push(application._id);
+  }
+  await Promise.all([...openByPage.values()].filter((application) => application.isModified()).map((application) => application.save()));
+  if (removeIds.length) {
+    await TrackedApplication.deleteMany({ _id: { $in: removeIds }, owner: req.user._id });
+  }
+  res.json({ applications: kept });
+});
+
+export const deleteApplication = asyncHandler(async (req, res) => {
+  const application = await TrackedApplication.findOneAndDelete({
+    _id: req.params.id,
+    owner: req.user._id,
+  });
+  if (!application) throw ApiError.notFound('Application not found');
+  res.status(204).end();
 });

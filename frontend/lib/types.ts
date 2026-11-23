@@ -298,6 +298,9 @@ export interface TrackedApplication {
   title: string;
   company: string;
   pageTitle: string;
+  pageKey?: string;
+  sessionId?: string;
+  submitted?: boolean;
   fields: ApplicationField[];
   appliedAt: string;
 }

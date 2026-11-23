@@ -76,6 +76,18 @@ export default function ApplicationTrackerPage() {
     }
   }
 
+  async function removeApplication(id: string) {
+    if (!window.confirm('Delete this application?')) return;
+    setError('');
+    try {
+      await api.deleteTrackedApplication(id);
+      if (openId === id) setOpenId('');
+      setApplications((current) => current.filter((application) => application._id !== id));
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : 'Could not delete that application');
+    }
+  }
+
   async function removeSubmitter(id: string) {
     if (!window.confirm('Remove this submitter? Applications they already sent stay on this page.')) return;
     setError('');
@@ -152,24 +164,39 @@ export default function ApplicationTrackerPage() {
             const open = openId === application._id;
             return (
               <article key={application._id} className="rounded-md border border-slate-200">
-                <button
-                  type="button"
-                  className="flex w-full items-start justify-between gap-3 px-3 py-3 text-left"
-                  onClick={() => setOpenId(open ? '' : application._id)}
-                >
-                  <span>
+                <div className="flex items-start justify-between gap-3 px-3 py-3">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => setOpenId(open ? '' : application._id)}
+                  >
                     <span className="block text-sm font-medium text-slate-800">
                       {application.title || application.pageTitle || application.domain || 'Application'}
                     </span>
                     <span className="mt-0.5 block text-xs text-slate-500">
-                      {formatWhen(application.appliedAt)}
+                      {application.submitted === false && application.sessionId ? 'In progress' : formatWhen(application.appliedAt)}
                       {' · '}
                       {application.submitterName || application.submitterEmail}
                       {application.company ? ` · ${application.company}` : ''}
                     </span>
+                  </button>
+                  <span className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="text-xs text-slate-400"
+                      onClick={() => setOpenId(open ? '' : application._id)}
+                    >
+                      {open ? 'Hide' : 'Content'}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-red-600 hover:underline"
+                      onClick={() => removeApplication(application._id)}
+                    >
+                      Delete
+                    </button>
                   </span>
-                  <span className="text-xs text-slate-400">{open ? 'Hide' : 'Content'}</span>
-                </button>
+                </div>
                 {open ? (
                   <div className="border-t border-slate-100 px-3 py-3 text-sm text-slate-700">
                     {application.url ? (

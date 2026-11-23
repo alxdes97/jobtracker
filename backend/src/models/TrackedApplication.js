@@ -20,6 +20,9 @@ const trackedApplicationSchema = new mongoose.Schema(
     title: { type: String, trim: true, default: '' },
     company: { type: String, trim: true, default: '' },
     pageTitle: { type: String, trim: true, default: '' },
+    pageKey: { type: String, trim: true, default: '' },
+    sessionId: { type: String, trim: true, default: '' },
+    submitted: { type: Boolean, default: false },
     fields: { type: [fieldSchema], default: [] },
     appliedAt: { type: Date, default: Date.now, index: true },
   },
@@ -27,5 +30,6 @@ const trackedApplicationSchema = new mongoose.Schema(
 );
 
 trackedApplicationSchema.index({ owner: 1, appliedAt: -1 });
+trackedApplicationSchema.index({ owner: 1, submitter: 1, pageKey: 1, submitted: 1 });
 
 export const TrackedApplication = mongoose.model('TrackedApplication', trackedApplicationSchema);
