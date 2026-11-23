@@ -333,6 +333,37 @@ export const api = {
     return request<{ applications: TrackedApplication[] }>(`/applications?${query.toString()}`);
   },
   deleteTrackedApplication: (id: string) => request<void>(`/applications/${id}`, { method: 'DELETE' }),
+  watchTrackedApplications: async (
+    signal: AbortSignal,
+    handlers: { onOpen?: () => void; onUpdate: () => void },
+  ) => {
+    const token = tokenStore.get();
+    const response = await fetch(`${API_URL}/applications/live`, {
+      headers: {
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal,
+    });
+    if (!response.ok || !response.body) {
+      throw new ApiError(response.status, 'Live updates are unavailable');
+    }
+    handlers.onOpen?.();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop() || '';
+      for (const chunk of chunks) {
+        if (chunk.includes('event: update')) handlers.onUpdate();
+      }
+    }
+    throw new ApiError(0, 'Live updates stopped');
+  },
 
   listTemplates: () => request<{ templates: EmailTemplate[] }>('/templates'),
   createTemplate: (data: Partial<EmailTemplate>) =>

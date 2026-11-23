@@ -766,8 +766,84 @@ check('records one submitted application for a submitter', async () => {
   });
   assert.equal(String(submitted.payload.application._id), String(recorded.payload.application._id));
   assert.equal(submitted.payload.application.submitted, true);
+  const captcha = await call('POST', '/api/application-track/applications', {
+    url: 'https://www.recaptcha.net/recaptcha/enterprise/anchor?ar=1',
+    domain: 'www.recaptcha.net',
+    pageTitle: 'reCAPTCHA',
+    fields: [{ label: 'Job title', name: 'title', value: 'Should not save' }],
+  });
+  assert.equal(captcha.status, 204);
+  const originOnly = await call('POST', '/api/application-track/applications', {
+    url: 'https://www.recaptcha.net/recaptcha/enterprise/anchor?co=aHR0cHM6Ly9qb2ItYm9hcmRzLmdyZWVuaG91c2UuaW86NDQz',
+    domain: 'www.recaptcha.net',
+    pageTitle: 'Apply',
+    fields: [{ label: 'Job title', name: 'title', value: 'Greenhouse role' }],
+  });
+  assert.equal(originOnly.status, 204);
+  const jobUrl = 'https://job-boards.greenhouse.io/acme/jobs/456';
+  const fromCaptcha = await call('POST', '/api/application-track/applications', {
+    url: `https://www.recaptcha.net/recaptcha/enterprise/anchor?co=${Buffer.from(jobUrl).toString('base64')}`,
+    domain: 'www.recaptcha.net',
+    pageTitle: 'Apply',
+    fields: [{ label: 'Job title', name: 'title', value: 'Greenhouse role' }],
+  });
+  assert.equal(fromCaptcha.status, 201);
+  assert.equal(fromCaptcha.payload.application.url, jobUrl);
+  assert.equal(fromCaptcha.payload.application.domain, 'job-boards.greenhouse.io');
+  const captchaTitleUrl = 'https://job-boards.greenhouse.io/acme/jobs/789';
+  const titledByUrl = await call('POST', '/api/application-track/applications', {
+    url: captchaTitleUrl,
+    domain: 'job-boards.greenhouse.io',
+    pageTitle: 'reCAPTCHA',
+    submitted: true,
+    fields: [{ label: 'Phone', name: 'phone', value: '555-0199' }],
+  });
+  assert.equal(titledByUrl.status, 201);
+  assert.equal(titledByUrl.payload.application.title, captchaTitleUrl);
 
   token = previousToken;
+  const removedTitle = await call('DELETE', `/api/applications/${titledByUrl.payload.application._id}`);
+  assert.equal(removedTitle.status, 204);
+  const removedCaptcha = await call('DELETE', `/api/applications/${fromCaptcha.payload.application._id}`);
+  assert.equal(removedCaptcha.status, 204);
+  const streamAbort = new AbortController();
+  try {
+    const stream = await fetch(`${baseUrl}/api/applications/live`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+      signal: streamAbort.signal,
+    });
+    assert.equal(stream.status, 200);
+    const reader = stream.body.getReader();
+    const decoder = new TextDecoder();
+    let liveText = '';
+    while (!liveText.includes('event: ready')) {
+      const chunk = await reader.read();
+      assert.equal(chunk.done, false);
+      liveText += decoder.decode(chunk.value);
+    }
+    token = signedIn.payload.token;
+    const extra = await call('POST', '/api/application-track/applications', {
+      url: 'https://live.example.com/job',
+      domain: 'live.example.com',
+      pageTitle: 'Live role',
+      fields: [{ label: 'Job title', name: 'title', value: 'Live role' }],
+    });
+    assert.equal(extra.status, 201);
+    token = previousToken;
+    const deadline = Date.now() + 3000;
+    while (!liveText.includes('event: update') && Date.now() < deadline) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      liveText += decoder.decode(chunk.value);
+    }
+    assert.match(liveText, /event: update/);
+    await reader.cancel();
+    const removedExtra = await call('DELETE', `/api/applications/${extra.payload.application._id}`);
+    assert.equal(removedExtra.status, 204);
+  } finally {
+    streamAbort.abort();
+  }
+
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);

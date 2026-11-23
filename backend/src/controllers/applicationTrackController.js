@@ -5,6 +5,7 @@ import { TrackedApplication } from '../models/TrackedApplication.js';
 import { User } from '../models/User.js';
 import { env } from '../config/env.js';
 import { ApiError, asyncHandler } from '../utils/apiError.js';
+import { publishApplicationUpdate, subscribeApplicationUpdates } from '../realtime/applicationUpdates.js';
 
 const FIELD_LIMIT = 200;
 const VALUE_LIMIT = 20_000;
@@ -53,6 +54,90 @@ function fieldMatch(fields, pattern) {
   return fields.find((field) => pattern.test(`${field.label} ${field.name}`))?.value || '';
 }
 
+function captchaLabel(value) {
+  return /recaptcha|hcaptcha|turnstile/i.test(String(value || ''));
+}
+
+function applicationTitle({ title, pageTitle, fields, url }) {
+  const candidates = [
+    String(title || '').trim(),
+    fieldMatch(fields, /job title|position|role title|\brole\b/i),
+    String(pageTitle || '').trim(),
+  ];
+  const chosen = candidates.find((value) => value && !captchaLabel(value));
+  if (chosen) return chosen.slice(0, 180);
+  return String(url || '').slice(0, 2000);
+}
+
+function isEmbedUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname;
+    const path = parsed.pathname;
+    if (/(^|\.)recaptcha\.net$/i.test(host)) return true;
+    if (/(^|\.)google\.com$/i.test(host) && /recaptcha/i.test(path)) return true;
+    if (/(^|\.)gstatic\.com$/i.test(host)) return true;
+    if (/(^|\.)hcaptcha\.com$/i.test(host)) return true;
+    if (/(^|\.)cloudflare\.com$/i.test(host) && /challenge|turnstile/i.test(path)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function fullJobUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    if ((parsed.protocol === 'https:' && parsed.port === '443') || (parsed.protocol === 'http:' && parsed.port === '80')) {
+      parsed.port = '';
+    }
+    parsed.hash = '';
+    if (/(^|\.)greenhouse\.io$/i.test(parsed.hostname) && /\/embed\/job_app/i.test(parsed.pathname)) {
+      const board = parsed.searchParams.get('for') || '';
+      const token = parsed.searchParams.get('token') || '';
+      if (/^[\w.-]+$/.test(board) && /^[\w.-]+$/.test(token)) {
+        return `https://job-boards.greenhouse.io/${board}/jobs/${token}`;
+      }
+    }
+    if (!parsed.pathname || parsed.pathname === '/') return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+function embedParentUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const encoded = parsed.searchParams.get('co');
+    if (!encoded) return '';
+    const parent = new URL(Buffer.from(encoded, 'base64').toString('utf8'));
+    if (isEmbedUrl(parent.toString())) return '';
+    return fullJobUrl(parent.toString());
+  } catch {
+    return '';
+  }
+}
+
+function preferJobUrl(current, incoming) {
+  if (!incoming) return current || '';
+  if (!current) return incoming;
+  const incomingJob = /\/jobs\/[^/?#]+/i.test(incoming);
+  const currentJob = /\/jobs\/[^/?#]+/i.test(current);
+  if (incomingJob && !currentJob) return incoming;
+  if (currentJob && !incomingJob) return current;
+  try {
+    const incomingPath = new URL(incoming).pathname;
+    const currentPath = new URL(current).pathname;
+    if (incomingPath.length > currentPath.length) return incoming;
+    if (currentPath.length > incomingPath.length) return current;
+  } catch {
+    return incoming;
+  }
+  return incoming;
+}
+
 function pageKeyFrom(url, domain) {
   try {
     const parsed = new URL(url);
@@ -75,12 +160,26 @@ function mergeFields(current, incoming) {
 }
 
 function applySnapshot(application, snapshot) {
-  application.url = snapshot.url || application.url;
-  application.domain = snapshot.domain || application.domain;
-  application.pageTitle = snapshot.pageTitle || application.pageTitle;
-  application.pageKey = snapshot.pageKey || application.pageKey;
+  const nextUrl = preferJobUrl(application.url, snapshot.url);
+  application.url = nextUrl || application.url;
+  if (nextUrl) {
+    application.pageKey = pageKeyFrom(nextUrl, snapshot.domain || application.domain);
+    try {
+      application.domain = new URL(nextUrl).hostname;
+    } catch {
+      application.domain = snapshot.domain || application.domain;
+    }
+  } else {
+    application.domain = snapshot.domain || application.domain;
+    application.pageKey = snapshot.pageKey || application.pageKey;
+  }
+  application.pageTitle = captchaLabel(snapshot.pageTitle)
+    ? (captchaLabel(application.pageTitle) ? '' : application.pageTitle)
+    : (snapshot.pageTitle || application.pageTitle);
   application.sessionId = snapshot.sessionId || application.sessionId;
-  application.title = snapshot.title || application.title;
+  application.title = captchaLabel(snapshot.title)
+    ? (application.url || application.title)
+    : (snapshot.title || (captchaLabel(application.title) ? application.url : application.title));
   application.company = snapshot.company || application.company;
   application.fields = mergeFields(application.fields, snapshot.fields);
   application.appliedAt = new Date();
@@ -109,16 +208,36 @@ export const session = asyncHandler(async (req, res) => {
 
 export const record = asyncHandler(async (req, res) => {
   const fields = cleanFields(req.body.fields);
-  const url = String(req.body.url || '').trim().slice(0, 2000);
-  const domain = String(req.body.domain || '').trim().slice(0, 180);
-  const pageTitle = String(req.body.pageTitle || '').trim().slice(0, 300);
-  const title = String(req.body.title || '').trim().slice(0, 180)
-    || fieldMatch(fields, /job title|position|role title|\brole\b/i)
-    || pageTitle;
+  const rawUrl = String(req.body.url || '').trim().slice(0, 2000);
+  let url = fullJobUrl(isEmbedUrl(rawUrl) ? embedParentUrl(rawUrl) : rawUrl);
+  if (!url) {
+    res.status(204).end();
+    return;
+  }
+  let domain = String(req.body.domain || '').trim().slice(0, 180);
+  if (url) {
+    try {
+      domain = new URL(url).hostname;
+    } catch {
+      domain = domain.slice(0, 180);
+    }
+  }
+  const pageTitleRaw = String(req.body.pageTitle || '').trim().slice(0, 300);
+  const pageTitle = captchaLabel(pageTitleRaw) ? '' : pageTitleRaw;
+  const title = applicationTitle({
+    title: req.body.title,
+    pageTitle: pageTitleRaw,
+    fields,
+    url,
+  });
   const company = String(req.body.company || '').trim().slice(0, 180)
     || fieldMatch(fields, /company/i);
   const submitted = req.body.submitted === true;
   const sessionId = String(req.body.sessionId || '').trim().slice(0, 80);
+  if (isEmbedUrl(url)) {
+    res.status(204).end();
+    return;
+  }
   const pageKey = pageKeyFrom(url, domain);
   if (!pageKey && fields.length === 0) throw ApiError.badRequest('Application content is required');
   if (!submitted && fields.length === 0) {
@@ -153,6 +272,7 @@ export const record = asyncHandler(async (req, res) => {
   if (application) {
     applySnapshot(application, snapshot);
     await application.save();
+    publishApplicationUpdate(req.submitter.owner);
     res.json({ application });
     return;
   }
@@ -165,6 +285,7 @@ export const record = asyncHandler(async (req, res) => {
     ...snapshot,
     appliedAt: new Date(),
   });
+  publishApplicationUpdate(req.submitter.owner);
   res.status(201).json({ application });
 });
 
@@ -214,6 +335,8 @@ export const listApplications = asyncHandler(async (req, res) => {
   const kept = [];
   const removeIds = [];
   for (const application of found) {
+    if (captchaLabel(application.pageTitle)) application.pageTitle = '';
+    if (captchaLabel(application.title)) application.title = application.url || '';
     const pageKey = application.pageKey || pageKeyFrom(application.url, application.domain);
     if (pageKey && application.pageKey !== pageKey) application.pageKey = pageKey;
     if (application.submitted || !pageKey) {
@@ -247,5 +370,26 @@ export const deleteApplication = asyncHandler(async (req, res) => {
     owner: req.user._id,
   });
   if (!application) throw ApiError.notFound('Application not found');
+  publishApplicationUpdate(req.user._id);
   res.status(204).end();
 });
+
+export function streamApplications(req, res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('event: ready\ndata: {}\n\n');
+  const unsubscribe = subscribeApplicationUpdates(req.user._id, () => {
+    res.write('event: update\ndata: {}\n\n');
+  });
+  const ping = setInterval(() => {
+    res.write(': ping\n\n');
+  }, 20000);
+  req.on('close', () => {
+    clearInterval(ping);
+    unsubscribe();
+  });
+}

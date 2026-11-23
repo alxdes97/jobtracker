@@ -139,6 +139,7 @@ router.delete('/company-tracks/:id', companyTracks.deleteCompanyTrack);
 router.get('/application-submitters', applicationTrack.listSubmitters);
 router.post('/application-submitters', applicationTrack.createSubmitter);
 router.delete('/application-submitters/:id', applicationTrack.deleteSubmitter);
+router.get('/applications/live', applicationTrack.streamApplications);
 router.get('/applications', applicationTrack.listApplications);
 router.delete('/applications/:id', applicationTrack.deleteApplication);
 
