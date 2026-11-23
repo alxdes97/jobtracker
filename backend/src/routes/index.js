@@ -8,6 +8,7 @@ import * as companyTracks from '../controllers/companyTrackController.js';
 import * as templates from '../controllers/templateController.js';
 import * as resumes from '../controllers/resumeController.js';
 import * as autokey from '../controllers/autokeyController.js';
+import * as applicationTrack from '../controllers/applicationTrackController.js';
 import {
   COMPANY_SIZES,
   COMPANY_TYPES,
@@ -35,6 +36,10 @@ router.get('/meta', (_req, res) =>
 router.post('/auth/register', auth.register);
 router.post('/auth/login', auth.login);
 router.get('/auth/me', requireAuth, auth.me);
+
+router.post('/application-track/login', applicationTrack.login);
+router.get('/application-track/session', applicationTrack.requireSubmitter, applicationTrack.session);
+router.post('/application-track/applications', applicationTrack.requireSubmitter, applicationTrack.record);
 
 router.use(requireAuth);
 
@@ -130,6 +135,11 @@ router.post('/company-tracks', companyTracks.createCompanyTrack);
 router.patch('/company-tracks/:id', companyTracks.updateCompanyTrack);
 router.post('/company-tracks/:id/view', companyTracks.viewCompanyTrackCommits);
 router.delete('/company-tracks/:id', companyTracks.deleteCompanyTrack);
+
+router.get('/application-submitters', applicationTrack.listSubmitters);
+router.post('/application-submitters', applicationTrack.createSubmitter);
+router.delete('/application-submitters/:id', applicationTrack.deleteSubmitter);
+router.get('/applications', applicationTrack.listApplications);
 
 router.get('/resumes', resumes.listResumes);
 router.post('/resumes', resumes.resumeUpload, resumes.createResume);

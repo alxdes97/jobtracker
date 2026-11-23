@@ -9,6 +9,7 @@ import {
   BuildingIcon,
   CalendarIcon,
   DashboardIcon,
+  ApplicationIcon,
   DocumentIcon,
   LogoutIcon,
   TrackIcon,
@@ -21,6 +22,11 @@ const DASHBOARD_PAGES = [
   { href: '/jobs', label: 'Jobs', icon: BriefcaseIcon },
   { href: '/people', label: 'People', icon: UsersIcon },
   { href: '/companies', label: 'Companies', icon: BuildingIcon },
+];
+
+const NAV_PAGES = [
+  ...DASHBOARD_PAGES,
+  { href: '/application-tracker', label: 'Application tracker', icon: ApplicationIcon },
 ];
 
 const SIDEBAR = [
@@ -49,13 +55,19 @@ const SIDEBAR = [
     icon: TrackIcon,
     active: (pathname: string) => pathname.startsWith('/company-track'),
   },
+  {
+    href: '/application-tracker',
+    label: 'Application tracker',
+    icon: ApplicationIcon,
+    active: (pathname: string) => pathname.startsWith('/application-tracker'),
+  },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const onDashboard = DASHBOARD_PAGES.some((page) => pathname.startsWith(page.href));
+  const onDashboard = NAV_PAGES.some((page) => pathname.startsWith(page.href));
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -114,7 +126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4">
           {onDashboard ? (
             <nav className="flex">
-              {DASHBOARD_PAGES.map((page) => {
+              {NAV_PAGES.map((page) => {
                 const Icon = page.icon;
                 const active = pathname.startsWith(page.href);
                 return (

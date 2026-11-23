@@ -4,6 +4,8 @@ import type {
   CompanyTrack,
   Contact,
   EmailTemplate,
+  ApplicationSubmitter,
+  TrackedApplication,
   Job,
   JobStatus,
   Meta,
@@ -316,6 +318,20 @@ export const api = {
     return payload as { resume: ResumeFile };
   },
   deleteResume: (id: string) => request<void>(`/resumes/${id}`, { method: 'DELETE' }),
+
+  listApplicationSubmitters: () => request<{ submitters: ApplicationSubmitter[] }>('/application-submitters'),
+  createApplicationSubmitter: (data: { email: string; password: string; name?: string }) =>
+    request<{ submitter: ApplicationSubmitter }>('/application-submitters', {
+      method: 'POST',
+      body: body(data),
+    }),
+  deleteApplicationSubmitter: (id: string) =>
+    request<void>(`/application-submitters/${id}`, { method: 'DELETE' }),
+  listTrackedApplications: (from: string, to: string, submitterId = '') => {
+    const query = new URLSearchParams({ from, to });
+    if (submitterId) query.set('submitterId', submitterId);
+    return request<{ applications: TrackedApplication[] }>(`/applications?${query.toString()}`);
+  },
 
   listTemplates: () => request<{ templates: EmailTemplate[] }>('/templates'),
   createTemplate: (data: Partial<EmailTemplate>) =>

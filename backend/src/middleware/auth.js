@@ -14,6 +14,7 @@ export async function requireAuth(req, _res, next) {
     if (!token) throw ApiError.unauthorized();
 
     const payload = jwt.verify(token, env.jwtSecret);
+    if (payload.kind === 'submitter') throw ApiError.unauthorized();
     const user = await User.findById(payload.sub);
     if (!user) throw ApiError.unauthorized();
 

@@ -719,6 +719,52 @@ check('deletes a job and unlinks it from contacts', async () => {
   assert.equal(contact.payload.contact.relatedJobs.length, 0);
 });
 
+check('records one submitted application for a submitter', async () => {
+  const created = await call('POST', '/api/application-submitters', {
+    name: 'Casey',
+    email: 'submitter@example.com',
+    password: 'password123',
+  });
+  assert.equal(created.status, 201);
+
+  const previousToken = token;
+  const signedIn = await call('POST', '/api/application-track/login', {
+    email: 'submitter@example.com',
+    password: 'password123',
+  });
+  assert.equal(signedIn.status, 200);
+  token = signedIn.payload.token;
+  const blocked = await call('GET', '/api/jobs');
+  assert.equal(blocked.status, 401);
+  const recorded = await call('POST', '/api/application-track/applications', {
+    url: 'https://jobs.example.com/apply',
+    domain: 'jobs.example.com',
+    pageTitle: 'Apply',
+    fields: [
+      { label: 'Job title', name: 'title', value: 'Engineer' },
+      { label: 'Phone', name: 'phone', value: '555-0100' },
+    ],
+  });
+  assert.equal(recorded.status, 201);
+  assert.equal(recorded.payload.application.title, 'Engineer');
+
+  token = previousToken;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const query = `from=${encodeURIComponent(start.toISOString())}&to=${encodeURIComponent(end.toISOString())}`;
+  const listed = await call('GET', `/api/applications?${query}`);
+  assert.equal(listed.status, 200);
+  assert.equal(listed.payload.applications.length, 1);
+  assert.equal(listed.payload.applications[0].submitterEmail, 'submitter@example.com');
+  assert.equal(listed.payload.applications[0].fields[1].value, '555-0100');
+
+  const removed = await call('DELETE', `/api/application-submitters/${created.payload.submitter._id}`);
+  assert.equal(removed.status, 204);
+  const kept = await call('GET', `/api/applications?${query}`);
+  assert.equal(kept.payload.applications.length, 1);
+});
+
 async function run() {
   const mongo = await MongoMemoryServer.create();
   await connectDatabase(mongo.getUri('job-tracker-test'));

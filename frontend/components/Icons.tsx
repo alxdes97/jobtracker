@@ -210,6 +210,16 @@ export function CheckSquareIcon({ className = base }: IconProps) {
   );
 }
 
+export function ApplicationIcon({ className = base }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
+      <path d="M8 4.5h6l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 7 19V6a1.5 1.5 0 0 1 1-1.5Z" />
+      <path d="M14 4.5V9h4.5" />
+      <path d="M9.5 13h5M9.5 16.5h5" />
+    </svg>
+  );
+}
+
 export function StarIcon({ className = base, filled = false }: IconProps & { filled?: boolean }) {
   return (
     <svg

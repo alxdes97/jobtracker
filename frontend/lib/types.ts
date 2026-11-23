@@ -275,6 +275,33 @@ export interface EmailTemplate {
   category: string;
 }
 
+export interface ApplicationSubmitter {
+  _id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface ApplicationField {
+  label: string;
+  name: string;
+  value: string;
+}
+
+export interface TrackedApplication {
+  _id: string;
+  submitter: string | null;
+  submitterEmail: string;
+  submitterName: string;
+  url: string;
+  domain: string;
+  title: string;
+  company: string;
+  pageTitle: string;
+  fields: ApplicationField[];
+  appliedAt: string;
+}
+
 export interface Meta {
   jobStatuses: JobStatus[];
   contactRelationships: string[];
