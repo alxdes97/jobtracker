@@ -882,6 +882,9 @@ check('saves each extension version and flags a different copy', async () => {
     ['application-track', 'job-tracker'],
   );
   assert.equal(listed.payload.extensions.find((item) => item.key === 'application-track').version, '1.1.0');
+  const ahead = await call('POST', '/api/extensions/application-track/report', { version: '1.2.0' });
+  assert.equal(ahead.status, 200);
+  assert.equal(ahead.payload.update, false);
 
   const saved = await call('PUT', '/api/extensions/application-track', { version: '9.9.9' });
   assert.equal(saved.status, 200);

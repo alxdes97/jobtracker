@@ -9,6 +9,18 @@ function cleanVersion(value) {
   return String(value || '').trim().slice(0, 40);
 }
 
+function versionOlder(installed, required) {
+  const parts = (value) => String(value).split('.').map((part) => Number.parseInt(part, 10));
+  const left = parts(installed);
+  const right = parts(required);
+  if (left.length < 3 || left.some((part) => Number.isNaN(part))) return true;
+  if (right.length < 3 || right.some((part) => Number.isNaN(part))) return false;
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) return left[index] < right[index];
+  }
+  return false;
+}
+
 async function ensureExtensions() {
   await Promise.all(EXTENSIONS.map((item) => (
     ExtensionRelease.updateOne({ key: item.key }, { $setOnInsert: item }, { upsert: true })
@@ -62,6 +74,6 @@ export const reportExtension = asyncHandler(async (req, res) => {
     name: extension.name,
     version: extension.version,
     installedVersion,
-    update: installedVersion !== extension.version,
+    update: versionOlder(installedVersion, extension.version),
   });
 });

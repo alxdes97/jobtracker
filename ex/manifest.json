@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Job Tracker",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Save the job posting or company website you are viewing into Job Tracker.",
   "action": {
     "default_title": "Save to Job Tracker",
