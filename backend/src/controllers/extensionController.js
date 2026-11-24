@@ -1,9 +1,69 @@
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { crc32 } from 'node:zlib';
 import jwt from 'jsonwebtoken';
 import { ApplicationSubmitter } from '../models/ApplicationSubmitter.js';
 import { EXTENSIONS, ExtensionRelease } from '../models/ExtensionRelease.js';
 import { User } from '../models/User.js';
 import { env } from '../config/env.js';
 import { ApiError, asyncHandler } from '../utils/apiError.js';
+
+const EXTENSION_PACKAGES = {
+  'application-track': path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../application-track'),
+};
+
+async function packageFiles(directory, prefix = '') {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (entry.name === '.git' || entry.name.startsWith('.')) continue;
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await packageFiles(fullPath, relative));
+    else if (entry.isFile()) files.push({ name: relative.replaceAll('\\', '/'), data: await readFile(fullPath) });
+  }
+  return files;
+}
+
+function zipStored(files) {
+  const local = [];
+  const central = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = Buffer.from(file.name);
+    const checksum = crc32(file.data);
+    const size = file.data.length;
+    const header = Buffer.alloc(30);
+    header.writeUInt32LE(0x04034b50, 0);
+    header.writeUInt16LE(20, 4);
+    header.writeUInt16LE(name.length, 26);
+    header.writeUInt32LE(checksum, 14);
+    header.writeUInt32LE(size, 18);
+    header.writeUInt32LE(size, 22);
+    local.push(header, name, file.data);
+
+    const directory = Buffer.alloc(46);
+    directory.writeUInt32LE(0x02014b50, 0);
+    directory.writeUInt16LE(20, 4);
+    directory.writeUInt16LE(20, 6);
+    directory.writeUInt32LE(checksum, 16);
+    directory.writeUInt32LE(size, 20);
+    directory.writeUInt32LE(size, 24);
+    directory.writeUInt16LE(name.length, 28);
+    directory.writeUInt32LE(offset, 42);
+    central.push(directory, name);
+    offset += header.length + name.length + size;
+  }
+  const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(centralSize, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...local, ...central, end]);
+}
 
 function cleanVersion(value) {
   return String(value || '').trim().slice(0, 40);
@@ -52,6 +112,25 @@ export const updateExtension = asyncHandler(async (req, res) => {
   );
   if (!extension) throw ApiError.notFound('Extension not found');
   res.json({ extension });
+});
+
+export const downloadExtension = asyncHandler(async (req, res) => {
+  const key = String(req.params.key || '');
+  const directory = EXTENSION_PACKAGES[key];
+  if (!directory) throw ApiError.notFound('Extension not found');
+  let files = [];
+  try {
+    files = await packageFiles(directory);
+  } catch {
+    throw ApiError.notFound('Extension package is not on this server');
+  }
+  if (!files.some((file) => file.name === 'manifest.json')) {
+    throw ApiError.notFound('Extension package is not on this server');
+  }
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${key}.zip"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(zipStored(files));
 });
 
 export const reportExtension = asyncHandler(async (req, res) => {

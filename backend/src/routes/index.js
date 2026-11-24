@@ -39,6 +39,7 @@ router.post('/auth/login', auth.login);
 router.get('/auth/me', requireAuth, auth.me);
 
 router.get('/extensions', extensions.listExtensions);
+router.get('/extensions/:key/download', extensions.downloadExtension);
 router.post('/extensions/:key/report', extensions.reportExtension);
 
 router.post('/application-track/login', applicationTrack.login);

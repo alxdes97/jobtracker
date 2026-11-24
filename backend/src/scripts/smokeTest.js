@@ -874,6 +874,18 @@ check('records one submitted application for a submitter', async () => {
   assert.equal(afterDelete.payload.applications.length, 0);
 });
 
+check('downloads the application track extension from the server address', async () => {
+  const response = await fetch(`${baseUrl}/api/extensions/application-track/download`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') || '', /zip/);
+  assert.match(response.headers.get('content-disposition') || '', /application-track\.zip/);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  assert.equal(bytes.subarray(0, 2).toString(), 'PK');
+  assert.match(bytes.toString('latin1'), /manifest\.json/);
+  const missing = await call('GET', '/api/extensions/job-tracker/download');
+  assert.equal(missing.status, 404);
+});
+
 check('saves each extension version and flags a different copy', async () => {
   const listed = await call('GET', '/api/extensions');
   assert.equal(listed.status, 200);
