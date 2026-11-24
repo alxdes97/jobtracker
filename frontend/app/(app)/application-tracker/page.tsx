@@ -358,7 +358,7 @@ export default function ApplicationTrackerPage() {
                     {selected.fields.map((field, index) => (
                       <div key={`${field.name}-${index}`}>
                         <dt className="text-xs font-medium text-slate-500">{field.label || field.name}</dt>
-                        <dd className="whitespace-pre-wrap">{field.value}</dd>
+                        <dd className={`whitespace-pre-wrap ${field.value ? '' : 'text-slate-400'}`}>{field.value || 'Empty'}</dd>
                       </div>
                     ))}
                   </dl>

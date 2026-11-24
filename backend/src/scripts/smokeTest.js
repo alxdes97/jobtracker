@@ -743,10 +743,12 @@ check('records one submitted application for a submitter', async () => {
     fields: [
       { label: 'Job title', name: 'title', value: 'Engineer' },
       { label: 'Phone', name: 'phone', value: '555-0100' },
+      { label: 'Website', name: 'website', value: '' },
     ],
   });
   assert.equal(recorded.status, 201);
   assert.equal(recorded.payload.application.title, 'Engineer');
+  assert.equal(recorded.payload.application.fields.find((field) => field.name === 'website')?.value, '');
   const again = await call('POST', '/api/application-track/applications', {
     url: 'https://jobs.example.com/apply?step=2',
     domain: 'jobs.example.com',

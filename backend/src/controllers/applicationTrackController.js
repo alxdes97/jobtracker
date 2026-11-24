@@ -42,8 +42,8 @@ function cleanFields(value) {
   for (const item of value) {
     const name = String(item?.name || '').trim().slice(0, 180);
     const label = String(item?.label || name || 'Field').trim().slice(0, 180);
-    const fieldValue = String(item?.value || '').trim().slice(0, VALUE_LIMIT);
-    if (!fieldValue) continue;
+    const fieldValue = String(item?.value ?? '').trim().slice(0, VALUE_LIMIT);
+    if (!label && !name) continue;
     fields.push({ label, name, value: fieldValue });
     if (fields.length >= FIELD_LIMIT) break;
   }
