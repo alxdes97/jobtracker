@@ -38,6 +38,24 @@ function submitterEmail(application: TrackedApplication) {
   return application.submitterEmail || 'Unknown';
 }
 
+function isMailbox(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (/(^|\.)mail\.google\.com$/.test(host) || host === 'gmail.com' || host === 'inbox.google.com') return true;
+    if (/(^|\.)outlook\.(live|office|office365)\.com$/.test(host) || host === 'outlook.cloud.microsoft') return true;
+    if (/(^|\.)mail\.yahoo\./.test(host)) return true;
+    if (host === 'mail.proton.me' || host === 'mail.protonmail.com' || host === 'app.proton.me') return true;
+    if (/(^|\.)mail\.aol\.com$/.test(host) || /(^|\.)mail\.zoho\.com$/.test(host)) return true;
+    if (/(^|\.)fastmail\.com$/.test(host) || host === 'app.hey.com' || /(^|\.)superhuman\.com$/.test(host)) return true;
+    if (host === 'www.icloud.com' && /^\/mail(\/|$)/.test(parsed.pathname)) return true;
+    if (/^webmail\./.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export default function ApplicationTrackerPage() {
   const [tab, setTab] = useState<'submitters' | 'jobs'>('jobs');
   const [submitters, setSubmitters] = useState<ApplicationSubmitter[]>([]);
@@ -123,7 +141,7 @@ export default function ApplicationTrackerPage() {
   }, [loadApplications]);
 
   const completed = useMemo(
-    () => applications.filter((application) => application.submitted === true),
+    () => applications.filter((application) => application.submitted === true && !isMailbox(application.url || '')),
     [applications],
   );
 

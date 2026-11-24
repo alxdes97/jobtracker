@@ -69,6 +69,24 @@ function applicationTitle({ title, pageTitle, fields, url }) {
   return String(url || '').slice(0, 2000);
 }
 
+function isMailbox(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (/(^|\.)mail\.google\.com$/.test(host) || host === 'gmail.com' || host === 'inbox.google.com') return true;
+    if (/(^|\.)outlook\.(live|office|office365)\.com$/.test(host) || host === 'outlook.cloud.microsoft') return true;
+    if (/(^|\.)mail\.yahoo\./.test(host)) return true;
+    if (host === 'mail.proton.me' || host === 'mail.protonmail.com' || host === 'app.proton.me') return true;
+    if (/(^|\.)mail\.aol\.com$/.test(host) || /(^|\.)mail\.zoho\.com$/.test(host)) return true;
+    if (/(^|\.)fastmail\.com$/.test(host) || host === 'app.hey.com' || /(^|\.)superhuman\.com$/.test(host)) return true;
+    if (host === 'www.icloud.com' && /^\/mail(\/|$)/.test(parsed.pathname)) return true;
+    if (/^webmail\./.test(host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function isEmbedUrl(url) {
   try {
     const parsed = new URL(url);
@@ -93,6 +111,7 @@ function fullJobUrl(url) {
       parsed.port = '';
     }
     parsed.hash = '';
+    if (isMailbox(parsed.toString())) return '';
     if (/(^|\.)greenhouse\.io$/i.test(parsed.hostname) && /\/embed\/job_app/i.test(parsed.pathname)) {
       const board = parsed.searchParams.get('for') || '';
       const token = parsed.searchParams.get('token') || '';
@@ -361,7 +380,9 @@ export const listApplications = asyncHandler(async (req, res) => {
   if (removeIds.length) {
     await TrackedApplication.deleteMany({ _id: { $in: removeIds }, owner: req.user._id });
   }
-  res.json({ applications: kept.filter((application) => application.submitted === true) });
+  res.json({
+    applications: kept.filter((application) => application.submitted === true && !isMailbox(application.url)),
+  });
 });
 
 export const deleteApplication = asyncHandler(async (req, res) => {

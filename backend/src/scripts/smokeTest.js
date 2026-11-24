@@ -782,6 +782,14 @@ check('records one submitted application for a submitter', async () => {
     fields: [{ label: 'Job title', name: 'title', value: 'Greenhouse role' }],
   });
   assert.equal(originOnly.status, 204);
+  const mailbox = await call('POST', '/api/application-track/applications', {
+    url: 'https://mail.google.com/mail/u/0/',
+    domain: 'mail.google.com',
+    pageTitle: 'Gmail',
+    submitted: true,
+    fields: [{ label: 'Search mail', name: 'q', value: '' }],
+  });
+  assert.equal(mailbox.status, 204);
   const jobUrl = 'https://job-boards.greenhouse.io/acme/jobs/456';
   const fromCaptcha = await call('POST', '/api/application-track/applications', {
     url: `https://www.recaptcha.net/recaptcha/enterprise/anchor?co=${Buffer.from(jobUrl).toString('base64')}`,
