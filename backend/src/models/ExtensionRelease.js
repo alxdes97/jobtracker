@@ -12,6 +12,6 @@ const extensionReleaseSchema = new mongoose.Schema(
 export const ExtensionRelease = mongoose.model('ExtensionRelease', extensionReleaseSchema);
 
 export const EXTENSIONS = [
-  { key: 'application-track', name: 'Application Track', version: '1.1.0' },
+  { key: 'application-track', name: 'Application Track', version: '1.2.0' },
   { key: 'job-tracker', name: 'Job Tracker', version: '1.1.0' },
 ];

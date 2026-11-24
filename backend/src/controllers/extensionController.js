@@ -22,9 +22,17 @@ function versionOlder(installed, required) {
 }
 
 async function ensureExtensions() {
-  await Promise.all(EXTENSIONS.map((item) => (
-    ExtensionRelease.updateOne({ key: item.key }, { $setOnInsert: item }, { upsert: true })
-  )));
+  await Promise.all(EXTENSIONS.map(async (item) => {
+    const existing = await ExtensionRelease.findOne({ key: item.key });
+    if (!existing) {
+      await ExtensionRelease.create(item);
+      return;
+    }
+    if (versionOlder(existing.version, item.version)) {
+      existing.version = item.version;
+      await existing.save();
+    }
+  }));
   return ExtensionRelease.find().sort({ name: 1 });
 }
 
