@@ -122,22 +122,27 @@ export default function ApplicationTrackerPage() {
     };
   }, [loadApplications]);
 
+  const completed = useMemo(
+    () => applications.filter((application) => application.submitted === true),
+    [applications],
+  );
+
   const emails = useMemo(() => {
     const found = new Set<string>();
-    for (const application of applications) found.add(submitterEmail(application));
+    for (const application of completed) found.add(submitterEmail(application));
     return [...found].sort((left, right) => left.localeCompare(right));
-  }, [applications]);
+  }, [completed]);
 
   const filtered = useMemo(() => {
-    if (!emailTab) return applications;
-    return applications.filter((application) => submitterEmail(application) === emailTab);
-  }, [applications, emailTab]);
+    if (!emailTab) return completed;
+    return completed.filter((application) => submitterEmail(application) === emailTab);
+  }, [completed, emailTab]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const pageItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
-  const selected = applications.find((application) => application._id === selectedId) || null;
+  const selected = completed.find((application) => application._id === selectedId) || null;
 
   useEffect(() => {
     setPage(1);
@@ -148,10 +153,10 @@ export default function ApplicationTrackerPage() {
   }, [emails, emailTab]);
 
   useEffect(() => {
-    if (selectedId && !applications.some((application) => application._id === selectedId)) {
+    if (selectedId && !completed.some((application) => application._id === selectedId)) {
       setSelectedId('');
     }
-  }, [applications, selectedId]);
+  }, [completed, selectedId]);
 
   async function saveExtensionVersion(key: string) {
     setSaving(true);
@@ -338,7 +343,7 @@ export default function ApplicationTrackerPage() {
             <aside className="flex max-h-80 w-full shrink-0 flex-col border-b border-slate-200 bg-white lg:max-h-none lg:w-80 lg:border-b-0 lg:border-r">
               <div className="min-h-0 flex-1 overflow-y-auto">
                 {pageItems.length === 0 ? (
-                  <p className="px-4 py-6 text-sm text-slate-400">No applications on this date.</p>
+                  <p className="px-4 py-6 text-sm text-slate-400">No completed applications on this date.</p>
                 ) : null}
                 {pageItems.map((application) => {
                   const active = application._id === selectedId;
@@ -351,7 +356,7 @@ export default function ApplicationTrackerPage() {
                     >
                       <span className="block truncate text-sm font-medium text-slate-800">{itemTitle(application)}</span>
                       <span className="mt-0.5 block truncate text-xs text-slate-500">
-                        {application.submitted === false && application.sessionId ? 'In progress' : formatWhen(application.appliedAt)}
+                        {formatWhen(application.appliedAt)}
                         {' · '}
                         {submitterEmail(application)}
                         {application.company ? ` · ${application.company}` : ''}
@@ -390,7 +395,7 @@ export default function ApplicationTrackerPage() {
                     <div className="min-w-0">
                       <h2 className="break-words text-base font-semibold text-slate-800">{itemTitle(selected)}</h2>
                       <p className="mt-1 text-sm text-slate-500">
-                        {selected.submitted === false && selected.sessionId ? 'In progress' : formatWhen(selected.appliedAt)}
+                        {formatWhen(selected.appliedAt)}
                         {' · '}
                         {selected.submitterName || submitterEmail(selected)}
                         {selected.company ? ` · ${selected.company}` : ''}

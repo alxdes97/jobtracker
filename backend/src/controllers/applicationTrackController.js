@@ -361,7 +361,7 @@ export const listApplications = asyncHandler(async (req, res) => {
   if (removeIds.length) {
     await TrackedApplication.deleteMany({ _id: { $in: removeIds }, owner: req.user._id });
   }
-  res.json({ applications: kept });
+  res.json({ applications: kept.filter((application) => application.submitted === true) });
 });
 
 export const deleteApplication = asyncHandler(async (req, res) => {
