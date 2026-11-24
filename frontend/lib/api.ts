@@ -5,6 +5,7 @@ import type {
   Contact,
   EmailTemplate,
   ApplicationSubmitter,
+  ExtensionRelease,
   TrackedApplication,
   Job,
   JobStatus,
@@ -319,6 +320,12 @@ export const api = {
   },
   deleteResume: (id: string) => request<void>(`/resumes/${id}`, { method: 'DELETE' }),
 
+  listExtensions: () => request<{ extensions: ExtensionRelease[] }>('/extensions'),
+  updateExtensionVersion: (key: string, version: string) =>
+    request<{ extension: ExtensionRelease }>(`/extensions/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: body({ version }),
+    }),
   listApplicationSubmitters: () => request<{ submitters: ApplicationSubmitter[] }>('/application-submitters'),
   createApplicationSubmitter: (data: { email: string; password: string; name?: string }) =>
     request<{ submitter: ApplicationSubmitter }>('/application-submitters', {

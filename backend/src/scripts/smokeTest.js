@@ -866,6 +866,52 @@ check('records one submitted application for a submitter', async () => {
   assert.equal(afterDelete.payload.applications.length, 0);
 });
 
+check('saves each extension version and flags a different copy', async () => {
+  const listed = await call('GET', '/api/extensions');
+  assert.equal(listed.status, 200);
+  assert.deepEqual(
+    listed.payload.extensions.map((item) => item.key).sort(),
+    ['application-track', 'job-tracker'],
+  );
+  assert.equal(listed.payload.extensions.find((item) => item.key === 'application-track').version, '1.1.0');
+
+  const saved = await call('PUT', '/api/extensions/application-track', { version: '9.9.9' });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.payload.extension.version, '9.9.9');
+  const invalid = await call('PUT', '/api/extensions/job-tracker', { version: 'latest' });
+  assert.equal(invalid.status, 400);
+
+  const created = await call('POST', '/api/application-submitters', {
+    name: 'Version',
+    email: 'version-submitter@example.com',
+    password: 'password123',
+  });
+  assert.equal(created.status, 201);
+  const ownerToken = token;
+  const signedIn = await call('POST', '/api/application-track/login', {
+    email: 'version-submitter@example.com',
+    password: 'password123',
+  });
+  token = signedIn.payload.token;
+  const older = await call('POST', '/api/extensions/application-track/report', { version: '1.1.0' });
+  assert.equal(older.status, 200);
+  assert.equal(older.payload.update, true);
+  assert.equal(older.payload.version, '9.9.9');
+  const current = await call('POST', '/api/extensions/application-track/report', { version: '9.9.9' });
+  assert.equal(current.payload.update, false);
+
+  token = ownerToken;
+  const submitters = await call('GET', '/api/application-submitters');
+  const versionSubmitter = submitters.payload.submitters.find((item) => item.email === 'version-submitter@example.com');
+  assert.equal(versionSubmitter.extensionVersion, '9.9.9');
+  const jobReport = await call('POST', '/api/extensions/job-tracker/report', { version: '1.0.0' });
+  assert.equal(jobReport.status, 200);
+  assert.equal(jobReport.payload.update, true);
+  const me = await call('GET', '/api/auth/me');
+  assert.equal(me.payload.user.extensionVersion, '1.0.0');
+  await call('DELETE', `/api/application-submitters/${created.payload.submitter._id}`);
+});
+
 async function run() {
   const mongo = await MongoMemoryServer.create();
   await connectDatabase(mongo.getUri('job-tracker-test'));

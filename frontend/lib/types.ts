@@ -279,7 +279,15 @@ export interface ApplicationSubmitter {
   _id: string;
   name: string;
   email: string;
+  extensionVersion?: string;
   createdAt: string;
+}
+
+export interface ExtensionRelease {
+  _id: string;
+  key: string;
+  name: string;
+  version: string;
 }
 
 export interface ApplicationField {

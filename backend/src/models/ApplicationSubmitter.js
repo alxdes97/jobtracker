@@ -6,6 +6,8 @@ const applicationSubmitterSchema = new mongoose.Schema(
     name: { type: String, trim: true, default: '' },
     email: { type: String, required: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true, select: false },
+    extensionVersion: { type: String, trim: true, default: '' },
+    extensionSeenAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

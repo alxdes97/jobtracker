@@ -19,6 +19,21 @@ header {
   font-size: 15px;
 }
 
+.version {
+  display: block;
+  color: #7d9a94;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.update {
+  margin: 0 0 8px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
 .connection {
   width: 12px;
   height: 12px;

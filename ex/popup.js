@@ -787,9 +787,37 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   startJobFromTab();
 });
 
+async function checkExtensionVersion(settings) {
+  const installed = chrome.runtime.getManifest().version;
+  const versionNode = $('#version');
+  if (versionNode) versionNode.textContent = `v${installed}`;
+  const update = $('#update');
+  try {
+    const response = await fetch(`${apiRoot(settings.apiUrl)}/extensions/job-tracker/report`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(settings.token ? { Authorization: `Bearer ${settings.token}` } : {}),
+      },
+      body: JSON.stringify({ version: installed }),
+    });
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!payload.update) {
+      update.hidden = true;
+      return;
+    }
+    update.hidden = false;
+    update.textContent = `Update this extension to v${payload.version}. This copy is v${installed}.`;
+  } catch {
+    // The server was unreachable.
+  }
+}
+
 loadSettings().then(async (settings) => {
   applyTab(await currentPage());
   refreshConnection(settings);
+  checkExtensionVersion(settings);
   if (!settings.token) {
     showSetup(settings);
     return;

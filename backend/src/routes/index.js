@@ -9,6 +9,7 @@ import * as templates from '../controllers/templateController.js';
 import * as resumes from '../controllers/resumeController.js';
 import * as autokey from '../controllers/autokeyController.js';
 import * as applicationTrack from '../controllers/applicationTrackController.js';
+import * as extensions from '../controllers/extensionController.js';
 import {
   COMPANY_SIZES,
   COMPANY_TYPES,
@@ -36,6 +37,9 @@ router.get('/meta', (_req, res) =>
 router.post('/auth/register', auth.register);
 router.post('/auth/login', auth.login);
 router.get('/auth/me', requireAuth, auth.me);
+
+router.get('/extensions', extensions.listExtensions);
+router.post('/extensions/:key/report', extensions.reportExtension);
 
 router.post('/application-track/login', applicationTrack.login);
 router.get('/application-track/session', applicationTrack.requireSubmitter, applicationTrack.session);
@@ -136,6 +140,7 @@ router.patch('/company-tracks/:id', companyTracks.updateCompanyTrack);
 router.post('/company-tracks/:id/view', companyTracks.viewCompanyTrackCommits);
 router.delete('/company-tracks/:id', companyTracks.deleteCompanyTrack);
 
+router.put('/extensions/:key', extensions.updateExtension);
 router.get('/application-submitters', applicationTrack.listSubmitters);
 router.post('/application-submitters', applicationTrack.createSubmitter);
 router.delete('/application-submitters/:id', applicationTrack.deleteSubmitter);

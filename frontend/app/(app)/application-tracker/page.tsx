@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import type { ApplicationSubmitter, TrackedApplication } from '@/lib/types';
+import type { ApplicationSubmitter, ExtensionRelease, TrackedApplication } from '@/lib/types';
 
 const PAGE_SIZE = 100;
 
@@ -41,6 +41,8 @@ function submitterEmail(application: TrackedApplication) {
 export default function ApplicationTrackerPage() {
   const [tab, setTab] = useState<'submitters' | 'jobs'>('jobs');
   const [submitters, setSubmitters] = useState<ApplicationSubmitter[]>([]);
+  const [extensions, setExtensions] = useState<ExtensionRelease[]>([]);
+  const [versionDrafts, setVersionDrafts] = useState<Record<string, string>>({});
   const [applications, setApplications] = useState<TrackedApplication[]>([]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -58,6 +60,12 @@ export default function ApplicationTrackerPage() {
     setSubmitters(response.submitters);
   }, []);
 
+  const loadExtensions = useCallback(async () => {
+    const response = await api.listExtensions();
+    setExtensions(response.extensions);
+    setVersionDrafts(Object.fromEntries(response.extensions.map((item) => [item.key, item.version])));
+  }, []);
+
   const loadApplications = useCallback(async () => {
     const range = dayRange(date);
     const response = await api.listTrackedApplications(range.from, range.to);
@@ -68,7 +76,10 @@ export default function ApplicationTrackerPage() {
     loadSubmitters().catch((loadError) => {
       setError(loadError instanceof Error ? loadError.message : 'Could not load submitters');
     });
-  }, [loadSubmitters]);
+    loadExtensions().catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : 'Could not load extension versions');
+    });
+  }, [loadSubmitters, loadExtensions]);
 
   useEffect(() => {
     loadApplications().catch((loadError) => {
@@ -141,6 +152,19 @@ export default function ApplicationTrackerPage() {
       setSelectedId('');
     }
   }, [applications, selectedId]);
+
+  async function saveExtensionVersion(key: string) {
+    setSaving(true);
+    setError('');
+    try {
+      await api.updateExtensionVersion(key, versionDrafts[key] || '');
+      await loadExtensions();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Could not save that version');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function addSubmitter(event: React.FormEvent) {
     event.preventDefault();
@@ -233,19 +257,51 @@ export default function ApplicationTrackerPage() {
               Name
               <input className="input mt-1 max-w-sm" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-semibold text-slate-800">Extension versions</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                A Chrome extension notifies its user when its version is different from the one saved here.
+              </p>
+              <ul className="mt-3 space-y-3">
+                {extensions.map((extension) => (
+                  <li key={extension.key} className="flex flex-wrap items-end gap-3">
+                    <label className="block text-sm text-slate-600">
+                      {extension.name}
+                      <input
+                        className="input mt-1 w-36"
+                        value={versionDrafts[extension.key] ?? extension.version}
+                        onChange={(event) => setVersionDrafts((current) => ({ ...current, [extension.key]: event.target.value }))}
+                      />
+                    </label>
+                    <button type="button" className="btn-secondary" disabled={saving} onClick={() => saveExtensionVersion(extension.key)}>
+                      Save
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
             <ul className="mt-4 divide-y divide-slate-100">
               {submitters.length === 0 ? <li className="py-3 text-sm text-slate-400">No submitters yet.</li> : null}
-              {submitters.map((submitter) => (
+              {submitters.map((submitter) => {
+                const required = extensions.find((item) => item.key === 'application-track')?.version || '';
+                const reported = submitter.extensionVersion || '';
+                const behind = reported && required && reported !== required;
+                return (
                 <li key={submitter._id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span>
                     <span className="font-medium text-slate-800">{submitter.name || submitter.email}</span>
                     {submitter.name ? <span className="ml-2 text-slate-500">{submitter.email}</span> : null}
+                    <span className={`ml-2 ${behind ? 'text-amber-700' : 'text-slate-400'}`}>
+                      {reported ? `v${reported}` : 'No version reported'}
+                      {behind ? ` · update to v${required}` : ''}
+                    </span>
                   </span>
                   <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => removeSubmitter(submitter._id)}>
                     Remove
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
         </div>

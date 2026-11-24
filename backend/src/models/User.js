@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     passwordHash: { type: String, required: true, select: false },
+    extensionVersion: { type: String, trim: true, default: '' },
+    extensionSeenAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
