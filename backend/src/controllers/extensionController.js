@@ -96,9 +96,24 @@ async function ensureExtensions() {
   return ExtensionRelease.find().sort({ name: 1 });
 }
 
+async function packagedVersion(key) {
+  const directory = EXTENSION_PACKAGES[key];
+  if (!directory) return '';
+  try {
+    const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
+    return cleanVersion(manifest.version);
+  } catch {
+    return '';
+  }
+}
+
 export const listExtensions = asyncHandler(async (_req, res) => {
   const extensions = await ensureExtensions();
-  res.json({ extensions });
+  const listed = await Promise.all(extensions.map(async (extension) => ({
+    ...extension.toJSON(),
+    packageVersion: await packagedVersion(extension.key),
+  })));
+  res.json({ extensions: listed });
 });
 
 export const updateExtension = asyncHandler(async (req, res) => {
