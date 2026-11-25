@@ -5,7 +5,7 @@ import { TrackedApplication } from '../models/TrackedApplication.js';
 import { User } from '../models/User.js';
 import { env } from '../config/env.js';
 import { ApiError, asyncHandler } from '../utils/apiError.js';
-import { publishApplicationUpdate, subscribeApplicationUpdates } from '../realtime/applicationUpdates.js';
+import { publishApplicationUpdate, subscribeApplicationUpdates, subscribePresence } from '../realtime/applicationUpdates.js';
 
 const FIELD_LIMIT = 200;
 const VALUE_LIMIT = 20_000;
@@ -415,11 +415,15 @@ export function streamApplications(req, res) {
   const unsubscribe = subscribeApplicationUpdates(req.user._id, () => {
     res.write('event: update\ndata: {}\n\n');
   });
+  const unsubscribePresence = subscribePresence(req.user._id, () => {
+    res.write('event: presence\ndata: {}\n\n');
+  });
   const ping = setInterval(() => {
     res.write(': ping\n\n');
   }, 20000);
   req.on('close', () => {
     clearInterval(ping);
     unsubscribe();
+    unsubscribePresence();
   });
 }

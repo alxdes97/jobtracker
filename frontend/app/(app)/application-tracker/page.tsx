@@ -154,6 +154,10 @@ export default function ApplicationTrackerPage() {
             onUpdate: () => {
               loadApplications().catch(() => {});
             },
+            onPresence: () => {
+              setNow(Date.now());
+              loadSubmitters().catch(() => {});
+            },
           });
         } catch {
           if (stopped || controller.signal.aborted) return;
@@ -171,7 +175,7 @@ export default function ApplicationTrackerPage() {
       setLive(false);
       controller.abort();
     };
-  }, [loadApplications]);
+  }, [loadApplications, loadSubmitters]);
 
   const completed = useMemo(
     () => applications.filter((application) => application.submitted === true && !isMailbox(application.url || '')),

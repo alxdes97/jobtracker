@@ -12,3 +12,13 @@ export function subscribeApplicationUpdates(ownerId, listener) {
   updates.on(key, listener);
   return () => updates.off(key, listener);
 }
+
+export function publishPresence(ownerId) {
+  updates.emit(`presence:${ownerId}`);
+}
+
+export function subscribePresence(ownerId, listener) {
+  const key = `presence:${ownerId}`;
+  updates.on(key, listener);
+  return () => updates.off(key, listener);
+}

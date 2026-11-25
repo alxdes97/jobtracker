@@ -983,6 +983,40 @@ check('saves each extension version and flags a different copy', async () => {
   const versionSubmitter = submitters.payload.submitters.find((item) => item.email === 'version-submitter@example.com');
   assert.equal(versionSubmitter.extensionVersion, '9.9.9');
   assert.ok(versionSubmitter.extensionSeenAt);
+
+  const presenceAbort = new AbortController();
+  try {
+    const stream = await fetch(`${baseUrl}/api/applications/live`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
+      signal: presenceAbort.signal,
+    });
+    assert.equal(stream.status, 200);
+    const reader = stream.body.getReader();
+    const decoder = new TextDecoder();
+    let liveText = '';
+    while (!liveText.includes('event: ready')) {
+      const chunk = await reader.read();
+      assert.equal(chunk.done, false);
+      liveText += decoder.decode(chunk.value);
+    }
+    token = signedIn.payload.token;
+    const offline = await call('POST', '/api/extensions/application-track/offline');
+    assert.equal(offline.status, 204);
+    const deadline = Date.now() + 3000;
+    while (!liveText.includes('event: presence') && Date.now() < deadline) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      liveText += decoder.decode(chunk.value);
+    }
+    assert.match(liveText, /event: presence/);
+    await reader.cancel();
+  } finally {
+    presenceAbort.abort();
+  }
+  token = ownerToken;
+  const signedOut = await call('GET', '/api/application-submitters');
+  const offlineSubmitter = signedOut.payload.submitters.find((item) => item.email === 'version-submitter@example.com');
+  assert.equal(offlineSubmitter.extensionSeenAt, null);
   const jobReport = await call('POST', '/api/extensions/job-tracker/report', { version: '1.0.0' });
   assert.equal(jobReport.status, 200);
   assert.equal(jobReport.payload.update, true);

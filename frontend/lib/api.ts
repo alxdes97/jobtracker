@@ -342,7 +342,7 @@ export const api = {
   deleteTrackedApplication: (id: string) => request<void>(`/applications/${id}`, { method: 'DELETE' }),
   watchTrackedApplications: async (
     signal: AbortSignal,
-    handlers: { onOpen?: () => void; onUpdate: () => void },
+    handlers: { onOpen?: () => void; onUpdate: () => void; onPresence?: () => void },
   ) => {
     const token = tokenStore.get();
     const response = await fetch(`${API_URL}/applications/live`, {
@@ -367,6 +367,7 @@ export const api = {
       buffer = chunks.pop() || '';
       for (const chunk of chunks) {
         if (chunk.includes('event: update')) handlers.onUpdate();
+        if (chunk.includes('event: presence')) handlers.onPresence?.();
       }
     }
     throw new ApiError(0, 'Live updates stopped');

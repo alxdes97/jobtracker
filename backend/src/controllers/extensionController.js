@@ -7,6 +7,7 @@ import { ApplicationSubmitter } from '../models/ApplicationSubmitter.js';
 import { EXTENSIONS, ExtensionRelease } from '../models/ExtensionRelease.js';
 import { User } from '../models/User.js';
 import { env } from '../config/env.js';
+import { publishPresence } from '../realtime/applicationUpdates.js';
 import { ApiError, asyncHandler } from '../utils/apiError.js';
 
 const EXTENSION_PACKAGES = {
@@ -162,7 +163,8 @@ export const reportExtension = asyncHandler(async (req, res) => {
       const payload = jwt.verify(token, env.jwtSecret);
       const seen = { extensionVersion: installedVersion, extensionSeenAt: new Date() };
       if (payload.kind === 'submitter' && extension.key === 'application-track') {
-        await ApplicationSubmitter.updateOne({ _id: payload.sub }, seen);
+        const submitter = await ApplicationSubmitter.findOneAndUpdate({ _id: payload.sub }, seen, { new: true });
+        if (submitter) publishPresence(submitter.owner);
       } else if (!payload.kind && extension.key === 'job-tracker') {
         await User.updateOne({ _id: payload.sub }, seen);
       }
@@ -178,4 +180,26 @@ export const reportExtension = asyncHandler(async (req, res) => {
     installedVersion,
     update: versionOlder(installedVersion, extension.version),
   });
+});
+
+export const leaveExtension = asyncHandler(async (req, res) => {
+  if (String(req.params.key || '') !== 'application-track') throw ApiError.notFound('Extension not found');
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (!token) throw ApiError.unauthorized();
+  let payload;
+  try {
+    payload = jwt.verify(token, env.jwtSecret);
+  } catch {
+    throw ApiError.unauthorized();
+  }
+  if (payload.kind !== 'submitter') throw ApiError.unauthorized();
+  const submitter = await ApplicationSubmitter.findOneAndUpdate(
+    { _id: payload.sub },
+    { extensionSeenAt: null },
+    { new: true },
+  );
+  if (!submitter) throw ApiError.unauthorized();
+  publishPresence(submitter.owner);
+  res.status(204).end();
 });
