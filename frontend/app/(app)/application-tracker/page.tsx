@@ -56,6 +56,30 @@ function isMailbox(url: string) {
   }
 }
 
+const ONLINE_MS = 3 * 60 * 1000;
+
+function extensionOnline(submitter: ApplicationSubmitter, now: number) {
+  if (!submitter.extensionSeenAt) return false;
+  const seen = new Date(submitter.extensionSeenAt).getTime();
+  return Number.isFinite(seen) && now - seen < ONLINE_MS;
+}
+
+function SubmitterStatus({ submitter, now, required = '' }: { submitter: ApplicationSubmitter; now: number; required?: string }) {
+  const online = extensionOnline(submitter, now);
+  const version = submitter.extensionVersion ? `v${submitter.extensionVersion}` : 'No version';
+  const behind = Boolean(submitter.extensionVersion && required && submitter.extensionVersion !== required);
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs">
+      <span className={`inline-block h-2 w-2 rounded-full ${online ? 'bg-green-600' : 'bg-slate-300'}`} />
+      <span className={online ? 'text-green-700' : 'text-slate-500'}>{online ? 'Online' : 'Offline'}</span>
+      <span className={behind ? 'text-amber-700' : 'text-slate-500'}>
+        {version}
+        {behind ? ` · update to v${required}` : ''}
+      </span>
+    </span>
+  );
+}
+
 export default function ApplicationTrackerPage() {
   const [tab, setTab] = useState<'submitters' | 'jobs'>('jobs');
   const [submitters, setSubmitters] = useState<ApplicationSubmitter[]>([]);
@@ -72,6 +96,7 @@ export default function ApplicationTrackerPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [live, setLive] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const loadSubmitters = useCallback(async () => {
     const response = await api.listApplicationSubmitters();
@@ -104,6 +129,14 @@ export default function ApplicationTrackerPage() {
       setError(loadError instanceof Error ? loadError.message : 'Could not load applications');
     });
   }, [loadApplications]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      loadSubmitters().catch(() => {});
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [loadSubmitters]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -305,31 +338,43 @@ export default function ApplicationTrackerPage() {
             </div>
             <ul className="mt-4 divide-y divide-slate-100">
               {submitters.length === 0 ? <li className="py-3 text-sm text-slate-400">No submitters yet.</li> : null}
-              {submitters.map((submitter) => {
-                const required = extensions.find((item) => item.key === 'application-track')?.version || '';
-                const reported = submitter.extensionVersion || '';
-                const behind = reported && required && reported !== required;
-                return (
+              {submitters.map((submitter) => (
                 <li key={submitter._id} className="flex items-center justify-between gap-3 py-2 text-sm">
                   <span>
                     <span className="font-medium text-slate-800">{submitter.name || submitter.email}</span>
                     {submitter.name ? <span className="ml-2 text-slate-500">{submitter.email}</span> : null}
-                    <span className={`ml-2 ${behind ? 'text-amber-700' : 'text-slate-400'}`}>
-                      {reported ? `v${reported}` : 'No version reported'}
-                      {behind ? ` · update to v${required}` : ''}
+                    <span className="ml-2">
+                      <SubmitterStatus
+                        submitter={submitter}
+                        now={now}
+                        required={extensions.find((item) => item.key === 'application-track')?.version || ''}
+                      />
                     </span>
                   </span>
                   <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => removeSubmitter(submitter._id)}>
                     Remove
                   </button>
                 </li>
-                );
-              })}
+              ))}
             </ul>
           </section>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex flex-wrap gap-2 border-b border-slate-200 bg-white px-4 py-3">
+            {submitters.length === 0 ? <p className="text-sm text-slate-400">No submitters yet.</p> : null}
+            {submitters.map((submitter) => (
+              <span key={submitter._id} className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-sm text-slate-700">
+                <span className="font-medium">{submitter.name || submitter.email}</span>
+                {submitter.name ? <span className="text-slate-500">{submitter.email}</span> : null}
+                <SubmitterStatus
+                  submitter={submitter}
+                  now={now}
+                  required={extensions.find((item) => item.key === 'application-track')?.version || ''}
+                />
+              </span>
+            ))}
+          </div>
           <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 bg-white px-4 py-3">
             <label className="block text-sm text-slate-600">
               Date

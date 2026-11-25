@@ -874,6 +874,59 @@ check('records one submitted application for a submitter', async () => {
   assert.equal(afterDelete.payload.applications.length, 0);
 });
 
+check('keeps every ApplyToJob page on one application', async () => {
+  const created = await call('POST', '/api/application-submitters', {
+    name: 'Idera',
+    email: 'idera-submitter@example.com',
+    password: 'password123',
+  });
+  assert.equal(created.status, 201);
+  const ownerToken = token;
+  const signedIn = await call('POST', '/api/application-track/login', {
+    email: 'idera-submitter@example.com',
+    password: 'password123',
+  });
+  token = signedIn.payload.token;
+  const first = await call('POST', '/api/application-track/applications', {
+    url: 'https://idera.applytojob.com/apply/UDiUb3F8gr/C-Integration-Developer?source=himalayas.app',
+    domain: 'idera.applytojob.com',
+    pageTitle: 'C# Integration Developer',
+    fields: [
+      { label: 'First Name', name: 'resumator-firstname-value', value: 'Ada' },
+      { label: 'Page 1', name: 'page-html', value: '<form>first name Ada</form>' },
+    ],
+  });
+  assert.equal(first.status, 201);
+  const second = await call('POST', '/api/application-track/applications', {
+    url: 'https://idera.applytojob.com/apply/confirm/UDiUb3F8gr?source=himalayas.app&utm_source=himalayas.app&utm_medium=himalayas.app',
+    domain: 'idera.applytojob.com',
+    pageTitle: 'C# Integration Developer',
+    submitted: true,
+    fields: [
+      { label: 'Phone', name: 'phone', value: '555-0142' },
+      { label: 'Page 2', name: 'page-html', value: '<form>phone 555-0142</form>' },
+    ],
+  });
+  assert.equal(second.status, 200);
+  assert.equal(String(second.payload.application._id), String(first.payload.application._id));
+  assert.equal(second.payload.application.submitted, true);
+  assert.equal(second.payload.application.fields.find((field) => field.name === 'resumator-firstname-value')?.value, 'Ada');
+  assert.equal(second.payload.application.fields.find((field) => field.label === 'Page 1')?.value, '<form>first name Ada</form>');
+  assert.equal(second.payload.application.fields.find((field) => field.label === 'Page 2')?.value, '<form>phone 555-0142</form>');
+  const other = await call('POST', '/api/application-track/applications', {
+    url: 'https://idera.applytojob.com/apply/OTHERJOB99',
+    domain: 'idera.applytojob.com',
+    pageTitle: 'Other role',
+    fields: [{ label: 'First Name', name: 'resumator-firstname-value', value: 'Grace' }],
+  });
+  assert.equal(other.status, 201);
+  assert.notEqual(String(other.payload.application._id), String(first.payload.application._id));
+  token = ownerToken;
+  await call('DELETE', `/api/applications/${second.payload.application._id}`);
+  await call('DELETE', `/api/applications/${other.payload.application._id}`);
+  await call('DELETE', `/api/application-submitters/${created.payload.submitter._id}`);
+});
+
 check('downloads the application track extension from the server address', async () => {
   const response = await fetch(`${baseUrl}/api/extensions/application-track/download`);
   assert.equal(response.status, 200);
@@ -927,6 +980,7 @@ check('saves each extension version and flags a different copy', async () => {
   const submitters = await call('GET', '/api/application-submitters');
   const versionSubmitter = submitters.payload.submitters.find((item) => item.email === 'version-submitter@example.com');
   assert.equal(versionSubmitter.extensionVersion, '9.9.9');
+  assert.ok(versionSubmitter.extensionSeenAt);
   const jobReport = await call('POST', '/api/extensions/job-tracker/report', { version: '1.0.0' });
   assert.equal(jobReport.status, 200);
   assert.equal(jobReport.payload.update, true);

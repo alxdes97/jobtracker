@@ -280,6 +280,7 @@ export interface ApplicationSubmitter {
   name: string;
   email: string;
   extensionVersion?: string;
+  extensionSeenAt?: string | null;
   createdAt: string;
 }
 
