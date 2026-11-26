@@ -169,11 +169,19 @@ function pageKeyFrom(url, domain) {
         if (id && /^[A-Za-z0-9_-]+$/.test(id)) return `${parsed.origin}/apply/${id}`.slice(0, 300);
       }
     }
+    if (/(^|\.)greenhouse\.io$/i.test(parsed.hostname)) {
+      const match = parsed.pathname.match(/^(.*)\/jobs\/(\d+)(?:\/(?:confirmation|apply|thankyou|thanks))?\/?$/i);
+      if (match) return `${parsed.origin}${match[1]}/jobs/${match[2]}`.slice(0, 300);
+    }
     const path = parsed.pathname.replace(/\/$/, '');
     return `${parsed.origin}${path}`.slice(0, 300);
   } catch {
     return String(domain || '').trim().slice(0, 300);
   }
+}
+
+function thanksTitle(value) {
+  return /thank you for applying|thanks for applying|successfully applied/i.test(String(value || ''));
 }
 
 function mergeFields(current, incoming) {
@@ -205,11 +213,13 @@ function applySnapshot(application, snapshot) {
     ? (captchaLabel(application.pageTitle) ? '' : application.pageTitle)
     : (snapshot.pageTitle || application.pageTitle);
   application.sessionId = snapshot.sessionId || application.sessionId;
-  application.title = captchaLabel(snapshot.title)
-    ? (application.url || application.title)
-    : (snapshot.title || (captchaLabel(application.title) ? application.url : application.title));
   application.company = snapshot.company || application.company;
   application.fields = mergeFields(application.fields, snapshot.fields);
+  if (!(thanksTitle(snapshot.title) && application.title && !thanksTitle(application.title))) {
+    application.title = captchaLabel(snapshot.title)
+      ? (application.url || application.title)
+      : (snapshot.title || (captchaLabel(application.title) ? application.url : application.title));
+  }
   application.appliedAt = new Date();
   if (snapshot.submitted) application.submitted = true;
 }

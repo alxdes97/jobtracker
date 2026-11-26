@@ -810,10 +810,36 @@ check('records one submitted application for a submitter', async () => {
   });
   assert.equal(titledByUrl.status, 201);
   assert.equal(titledByUrl.payload.application.title, captchaTitleUrl);
+  const greenhouseJob = 'https://job-boards.greenhouse.io/memx/jobs/5494567008';
+  const greenhouseDraft = await call('POST', '/api/application-track/applications', {
+    url: greenhouseJob,
+    domain: 'job-boards.greenhouse.io',
+    pageTitle: 'Platform Engineer',
+    fields: [
+      { label: 'First name', name: 'first_name', value: 'Ada' },
+      { label: 'Email', name: 'email', value: 'ada@example.com' },
+    ],
+  });
+  assert.equal(greenhouseDraft.status, 201);
+  const greenhouseDone = await call('POST', '/api/application-track/applications', {
+    url: `${greenhouseJob}/confirmation`,
+    domain: 'job-boards.greenhouse.io',
+    pageTitle: 'Thank you for applying',
+    submitted: true,
+    fields: [{ label: 'Confirmation', name: 'confirmation', value: 'Thank you for applying.' }],
+  });
+  assert.equal(greenhouseDone.status, 200);
+  assert.equal(String(greenhouseDone.payload.application._id), String(greenhouseDraft.payload.application._id));
+  assert.equal(greenhouseDone.payload.application.submitted, true);
+  assert.equal(greenhouseDone.payload.application.title, 'Platform Engineer');
+  assert.equal(greenhouseDone.payload.application.fields.find((field) => field.name === 'first_name')?.value, 'Ada');
+  assert.equal(greenhouseDone.payload.application.fields.find((field) => field.name === 'confirmation')?.value, 'Thank you for applying.');
 
   token = previousToken;
   const removedTitle = await call('DELETE', `/api/applications/${titledByUrl.payload.application._id}`);
   assert.equal(removedTitle.status, 204);
+  const removedGreenhouse = await call('DELETE', `/api/applications/${greenhouseDone.payload.application._id}`);
+  assert.equal(removedGreenhouse.status, 204);
   const removedCaptcha = await call('DELETE', `/api/applications/${fromCaptcha.payload.application._id}`);
   assert.equal(removedCaptcha.status, 204);
   const streamAbort = new AbortController();
