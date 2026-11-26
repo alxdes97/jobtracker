@@ -937,6 +937,15 @@ check('downloads the application track extension from the server address', async
   assert.match(bytes.toString('latin1'), /manifest\.json/);
   const missing = await call('GET', '/api/extensions/job-tracker/download');
   assert.equal(missing.status, 404);
+  const mobile = await fetch(`${baseUrl}/api/extensions/application-track/mobile.user.js`);
+  assert.equal(mobile.status, 200);
+  assert.match(mobile.headers.get('content-type') || '', /javascript/);
+  const script = await mobile.text();
+  assert.match(script, /==UserScript==/);
+  assert.match(script, /function installMobile/);
+  assert.match(script, /reportConfirmation/);
+  const jobTrackerMobile = await call('GET', '/api/extensions/job-tracker/mobile.user.js');
+  assert.equal(jobTrackerMobile.status, 404);
 });
 
 check('saves each extension version and flags a different copy', async () => {

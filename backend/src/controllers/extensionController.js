@@ -149,6 +149,45 @@ export const downloadExtension = asyncHandler(async (req, res) => {
   res.send(zipStored(files));
 });
 
+export const mobileScript = asyncHandler(async (req, res) => {
+  if (String(req.params.key || '') !== 'application-track') throw ApiError.notFound('Extension not found');
+  const directory = EXTENSION_PACKAGES['application-track'];
+  let host = '';
+  let background = '';
+  let content = '';
+  let version = '1.3.0';
+  try {
+    [host, background, content] = await Promise.all([
+      readFile(path.join(directory, 'mobile-host.js'), 'utf8'),
+      readFile(path.join(directory, 'background.js'), 'utf8'),
+      readFile(path.join(directory, 'content.js'), 'utf8'),
+    ]);
+    const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
+    version = cleanVersion(manifest.version) || version;
+  } catch {
+    throw ApiError.notFound('Extension package is not on this server');
+  }
+  const script = `// ==UserScript==
+// @name         Application Track
+// @namespace    application-track
+// @version      ${version}
+// @description  Record a submitted job application from Android or iPad
+// @match        *://*/*
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_xmlhttpRequest
+// @connect      *
+// @run-at       document-idle
+// ==/UserScript==
+${host}
+installMobile(${JSON.stringify(background)}, ${JSON.stringify(content)}, ${JSON.stringify(version)});
+`;
+  res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Disposition', 'inline; filename="application-track.user.js"');
+  res.send(script);
+});
+
 export const reportExtension = asyncHandler(async (req, res) => {
   const extensions = await ensureExtensions();
   const extension = extensions.find((item) => item.key === String(req.params.key || ''));
