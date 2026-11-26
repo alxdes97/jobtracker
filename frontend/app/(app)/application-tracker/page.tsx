@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
+import { presentFields } from '@/lib/formFields';
 import type { ApplicationSubmitter, ExtensionRelease, TrackedApplication } from '@/lib/types';
 
 const PAGE_SIZE = 100;
@@ -198,6 +199,7 @@ export default function ApplicationTrackerPage() {
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const pageItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
   const selected = completed.find((application) => application._id === selectedId) || null;
+  const shownFields = selected ? presentFields(selected.fields) : [];
 
   useEffect(() => {
     setPage(1);
@@ -482,11 +484,11 @@ export default function ApplicationTrackerPage() {
                     </a>
                   ) : null}
                   <dl className="mt-4 space-y-3 text-sm text-slate-700">
-                    {selected.fields.length === 0 ? <p className="text-slate-400">No form fields were captured.</p> : null}
-                    {selected.fields.map((field, index) => (
-                      <div key={`${field.name}-${index}`}>
-                        <dt className="text-xs font-medium text-slate-500">{field.label || field.name}</dt>
-                        <dd className={`whitespace-pre-wrap ${field.value ? '' : 'text-slate-400'}`}>{field.value || 'Empty'}</dd>
+                    {shownFields.length === 0 ? <p className="text-slate-400">No form fields were captured.</p> : null}
+                    {shownFields.map((field, index) => (
+                      <div key={`${field.label}-${index}`}>
+                        <dt className="text-xs font-medium text-slate-500">{field.label}</dt>
+                        <dd className="whitespace-pre-wrap">{field.value}</dd>
                       </div>
                     ))}
                   </dl>
