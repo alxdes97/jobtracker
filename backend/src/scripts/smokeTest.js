@@ -970,6 +970,18 @@ check('downloads the application track extension from the server address', async
   assert.match(script, /==UserScript==/);
   assert.match(script, /function installMobile/);
   assert.match(script, /reportConfirmation/);
+  const mobileZip = await fetch(`${baseUrl}/api/extensions/application-track/mobile.zip`);
+  assert.equal(mobileZip.status, 200);
+  assert.match(mobileZip.headers.get('content-type') || '', /zip/);
+  assert.match(mobileZip.headers.get('content-disposition') || '', /application-track-mobile\.zip/);
+  const mobileBytes = Buffer.from(await mobileZip.arrayBuffer());
+  assert.equal(mobileBytes.subarray(0, 2).toString(), 'PK');
+  const mobileText = mobileBytes.toString('latin1');
+  assert.match(mobileText, /manifest\.json/);
+  assert.match(mobileText, /application-track\.user\.js/);
+  assert.match(mobileText, /==UserScript==/);
+  const missingMobileZip = await call('GET', '/api/extensions/job-tracker/mobile.zip');
+  assert.equal(missingMobileZip.status, 404);
   const jobTrackerMobile = await call('GET', '/api/extensions/job-tracker/mobile.user.js');
   assert.equal(jobTrackerMobile.status, 404);
 });

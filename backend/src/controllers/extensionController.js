@@ -149,25 +149,16 @@ export const downloadExtension = asyncHandler(async (req, res) => {
   res.send(zipStored(files));
 });
 
-export const mobileScript = asyncHandler(async (req, res) => {
-  if (String(req.params.key || '') !== 'application-track') throw ApiError.notFound('Extension not found');
+async function mobileUserscript() {
   const directory = EXTENSION_PACKAGES['application-track'];
-  let host = '';
-  let background = '';
-  let content = '';
-  let version = '1.3.0';
-  try {
-    [host, background, content] = await Promise.all([
-      readFile(path.join(directory, 'mobile-host.js'), 'utf8'),
-      readFile(path.join(directory, 'background.js'), 'utf8'),
-      readFile(path.join(directory, 'content.js'), 'utf8'),
-    ]);
-    const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
-    version = cleanVersion(manifest.version) || version;
-  } catch {
-    throw ApiError.notFound('Extension package is not on this server');
-  }
-  const script = `// ==UserScript==
+  const [host, background, content, manifestText] = await Promise.all([
+    readFile(path.join(directory, 'mobile-host.js'), 'utf8'),
+    readFile(path.join(directory, 'background.js'), 'utf8'),
+    readFile(path.join(directory, 'content.js'), 'utf8'),
+    readFile(path.join(directory, 'manifest.json'), 'utf8'),
+  ]);
+  const version = cleanVersion(JSON.parse(manifestText).version) || '1.3.3';
+  return `// ==UserScript==
 // @name         Application Track
 // @namespace    application-track
 // @version      ${version}
@@ -182,10 +173,39 @@ export const mobileScript = asyncHandler(async (req, res) => {
 ${host}
 installMobile(${JSON.stringify(background)}, ${JSON.stringify(content)}, ${JSON.stringify(version)});
 `;
+}
+
+export const mobileScript = asyncHandler(async (req, res) => {
+  if (String(req.params.key || '') !== 'application-track') throw ApiError.notFound('Extension not found');
+  let script = '';
+  try {
+    script = await mobileUserscript();
+  } catch {
+    throw ApiError.notFound('Extension package is not on this server');
+  }
   res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Disposition', 'inline; filename="application-track.user.js"');
   res.send(script);
+});
+
+export const downloadMobile = asyncHandler(async (req, res) => {
+  if (String(req.params.key || '') !== 'application-track') throw ApiError.notFound('Extension not found');
+  const directory = EXTENSION_PACKAGES['application-track'];
+  let files = [];
+  try {
+    files = await packageFiles(directory);
+    files.push({ name: 'application-track.user.js', data: Buffer.from(await mobileUserscript()) });
+  } catch {
+    throw ApiError.notFound('Extension package is not on this server');
+  }
+  if (!files.some((file) => file.name === 'manifest.json')) {
+    throw ApiError.notFound('Extension package is not on this server');
+  }
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="application-track-mobile.zip"');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(zipStored(files));
 });
 
 export const reportExtension = asyncHandler(async (req, res) => {

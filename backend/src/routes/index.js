@@ -41,6 +41,7 @@ router.get('/auth/me', requireAuth, auth.me);
 router.get('/extensions', extensions.listExtensions);
 router.get('/extensions/:key/download', extensions.downloadExtension);
 router.get('/extensions/:key/mobile.user.js', extensions.mobileScript);
+router.get('/extensions/:key/mobile.zip', extensions.downloadMobile);
 router.post('/extensions/:key/report', extensions.reportExtension);
 router.post('/extensions/:key/offline', extensions.leaveExtension);
 
